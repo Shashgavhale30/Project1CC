@@ -12,10 +12,13 @@ const allowedOrigins = (process.env.FRONTEND_URL || "")
   .map((o) => o.trim())
   .filter(Boolean);
 
+const isLocalOrigin = (o) => /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(o);
+
 app.use(cors({
   origin: (origin, cb) => {
     if (!origin) return cb(null, true);
-    if (origin === "null" && process.env.NODE_ENV !== "production") return cb(null, true);
+    if (process.env.NODE_ENV !== "production" && (origin === "null" || isLocalOrigin(origin)))
+      return cb(null, true);
     if (allowedOrigins.includes(origin)) return cb(null, true);
     cb(new Error("CORS: origin not allowed"));
   },
