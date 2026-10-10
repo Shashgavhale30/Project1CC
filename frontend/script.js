@@ -319,8 +319,11 @@ function hideBanner() {
   banner.className = "status-banner hidden";
 }
 
-/** Toggle the loading spinner and table visibility. */
+/** Toggle the loading spinner. Only wipe the table when the spinner appears
+ *  (before new rows are rendered). Never re-assign innerHTML on hide —
+ *  doing so would destroy the event listeners on Edit/Delete buttons. */
 function showLoading(show) {
   loading.classList.toggle("hidden", !show);
-  tableBody.innerHTML = show ? "" : tableBody.innerHTML;
+  if (show) tableBody.innerHTML = ""; // clear stale rows while loading
+  // Do NOT touch tableBody when hiding — event listeners must stay intact
 }
