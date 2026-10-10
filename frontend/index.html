@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Student Information Management System</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <!-- ── HEADER ── -->
+  <header>
+    <div class="header-inner">
+      <span class="logo">🎓</span>
+      <div>
+        <h1>Student Information Management System</h1>
+        <p class="subtitle">Three-Tier Cloud Application · Netlify → Render → MongoDB Atlas</p>
+      </div>
+    </div>
+  </header>
+
+  <main>
+
+    <!-- ── ADD / EDIT FORM (Tier 1 – collects data, sends it to Tier 2) ── -->
+    <section class="card" id="form-section">
+      <h2 id="form-title">➕ Add New Student</h2>
+
+      <!-- Global status banner (success / error messages appear here) -->
+      <div id="status-banner" class="status-banner hidden" role="alert"></div>
+
+      <form id="student-form" novalidate>
+        <div class="form-grid">
+          <div class="field">
+            <label for="studentId">Student ID <span class="req">*</span></label>
+            <input type="text" id="studentId" placeholder="e.g. ST101" required />
+          </div>
+
+          <div class="field">
+            <label for="name">Full Name <span class="req">*</span></label>
+            <input type="text" id="name" placeholder="e.g. Rahul Sharma" required />
+          </div>
+
+          <div class="field">
+            <label for="email">Email <span class="req">*</span></label>
+            <input type="email" id="email" placeholder="rahul@example.com" required />
+          </div>
+
+          <div class="field">
+            <label for="department">Department <span class="req">*</span></label>
+            <input type="text" id="department" placeholder="e.g. CSE" required />
+          </div>
+
+          <div class="field">
+            <label for="semester">Semester <span class="req">*</span> (1–12)</label>
+            <input type="number" id="semester" min="1" max="12" placeholder="5" required />
+          </div>
+
+          <div class="field">
+            <label for="contact">Contact <span class="opt">(optional)</span></label>
+            <input type="text" id="contact" placeholder="e.g. +91 9876543210" />
+          </div>
+        </div>
+
+        <div class="form-actions">
+          <button type="submit" id="submit-btn" class="btn btn-primary">Add Student</button>
+          <button type="button" id="cancel-btn" class="btn btn-secondary hidden">Cancel Edit</button>
+        </div>
+      </form>
+    </section>
+
+    <!-- ── STUDENT LIST ── -->
+    <section class="card" id="list-section">
+      <div class="list-header">
+        <h2>📋 Student Records</h2>
+        <div class="search-box">
+          <input
+            type="search"
+            id="search-input"
+            placeholder="🔍 Search by name…"
+            aria-label="Search students by name"
+          />
+        </div>
+      </div>
+
+      <!-- Spinner shown while fetching data -->
+      <div id="loading" class="loading hidden">
+        <div class="spinner"></div>
+        <p>Loading students…</p>
+      </div>
+
+      <!-- Cold-start notice for Render free tier -->
+      <div id="cold-start-notice" class="cold-start hidden">
+        ⏳ The server is waking up (Render free tier cold start).
+        Please wait ~30 seconds, then click <button id="retry-btn" class="btn-link">Retry</button>.
+      </div>
+
+      <!-- Table wrapper enables horizontal scroll on mobile -->
+      <div class="table-wrapper">
+        <table id="students-table">
+          <thead>
+            <tr>
+              <th>Student ID</th>
+              <th>Name</th>
+              <th>Email</th>
+              <th>Department</th>
+              <th>Semester</th>
+              <th>Contact</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="table-body">
+            <!-- Rows injected by script.js using textContent (XSS-safe) -->
+          </tbody>
+        </table>
+        <p id="empty-msg" class="empty-msg hidden">No students found.</p>
+      </div>
+    </section>
+
+  </main>
+
+  <footer>
+    <p>Student Information Management System · Cloud Computing Mini Project</p>
+  </footer>
+
+  <script src="script.js"></script>
+</body>
+</html>

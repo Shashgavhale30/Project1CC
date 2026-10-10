@@ -1,0 +1,12 @@
+# Netlify configuration for the frontend static site (Tier 1)
+# Publish the frontend/ folder as-is — no build step needed (plain HTML/CSS/JS)
+
+[build]
+  publish = "."
+  # No build command — static files are served directly
+
+# Redirect all 404s back to index.html (single-page app behaviour)
+[[redirects]]
+  from = "/*"
+  to   = "/index.html"
+  status = 200
