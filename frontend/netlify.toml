@@ -1,12 +1,11 @@
-# Netlify configuration for the frontend static site (Tier 1)
-# Publish the frontend/ folder as-is — no build step needed (plain HTML/CSS/JS)
+# Netlify configuration for Project1CC
 
 [build]
   publish = "."
-  # No build command — static files are served directly
+  command = "echo 'No build required for static HTML/CSS/JS'"
 
-# Redirect all 404s back to index.html (single-page app behaviour)
+# Redirect all routes to index.html for single-page app behaviour
 [[redirects]]
   from = "/*"
-  to   = "/index.html"
+  to = "/index.html"
   status = 200
