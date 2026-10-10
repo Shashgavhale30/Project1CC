@@ -1,5 +1,5 @@
 // Change this to your Render URL after deploying the backend
-const API = "http://localhost:5000/api/students";
+const API = "https://project1cc-backend.onrender.com/api/students";
 
 const { useState, useEffect, useRef, useCallback, createElement: h } = React;
 
