@@ -1,15 +1,17 @@
 // Change this to your Render URL after deploying the backend
 const API = "http://localhost:5000/api/students";
 
-const { useState, useEffect, useRef, useCallback } = React;
+const { useState, useEffect, useRef, useCallback, createElement: h } = React;
 
 const EMPTY = { studentId: "", name: "", email: "", department: "", semester: "", contact: "" };
 
+// ── Banner ────────────────────────────────────────────────
 function Banner({ type, message }) {
-  if (!type) return null;
-  return <div className={`status-banner ${type}`}>{message}</div>;
+  if (!type || !message) return null;
+  return h("div", { className: "status-banner " + type }, message);
 }
 
+// ── Student Form (Add / Edit) ─────────────────────────────
 function StudentForm({ editing, onSave, onCancel, banner, setBanner }) {
   const [form, setForm] = useState(EMPTY);
   const [busy, setBusy] = useState(false);
@@ -39,7 +41,6 @@ function StudentForm({ editing, onSave, onCancel, banner, setBanner }) {
     e.preventDefault();
     const err = validate();
     if (err) { setBanner({ type: "error", message: err }); return; }
-
     setBusy(true);
     const payload = {
       studentId: form.studentId.trim(),
@@ -49,7 +50,6 @@ function StudentForm({ editing, onSave, onCancel, banner, setBanner }) {
       semester: parseInt(form.semester, 10),
       contact: form.contact.trim(),
     };
-
     try {
       const url = editing ? `${API}/${encodeURIComponent(editing.studentId)}` : API;
       const res = await fetch(url, {
@@ -69,69 +69,59 @@ function StudentForm({ editing, onSave, onCancel, banner, setBanner }) {
     }
   }
 
-  return (
-    <section className="card" id="form-section">
-      <h2>{editing ? `Edit Student — ${editing.studentId}` : "Add New Student"}</h2>
-      <Banner type={banner.type} message={banner.message} />
-      <form onSubmit={submit} noValidate>
-        <div className="form-grid">
-          <div className="field">
-            <label>Student ID <span className="req">*</span></label>
-            <input name="studentId" value={form.studentId} onChange={change} placeholder="e.g. ST101" disabled={!!editing} required />
-          </div>
-          <div className="field">
-            <label>Full Name <span className="req">*</span></label>
-            <input name="name" value={form.name} onChange={change} placeholder="e.g. Rahul Sharma" required />
-          </div>
-          <div className="field">
-            <label>Email <span className="req">*</span></label>
-            <input type="email" name="email" value={form.email} onChange={change} placeholder="rahul@example.com" required />
-          </div>
-          <div className="field">
-            <label>Department <span className="req">*</span></label>
-            <input name="department" value={form.department} onChange={change} placeholder="e.g. CSE" required />
-          </div>
-          <div className="field">
-            <label>Semester <span className="req">*</span> (1–12)</label>
-            <input type="number" name="semester" value={form.semester} onChange={change} min="1" max="12" placeholder="5" required />
-          </div>
-          <div className="field">
-            <label>Contact <span className="opt">(optional)</span></label>
-            <input name="contact" value={form.contact} onChange={change} placeholder="+91 9876543210" />
-          </div>
-        </div>
-        <div className="form-actions">
-          <button type="submit" className="btn btn-primary" disabled={busy}>
-            {busy ? "Saving..." : editing ? "Update Student" : "Add Student"}
-          </button>
-          {editing && (
-            <button type="button" className="btn btn-secondary" onClick={onCancel}>Cancel</button>
-          )}
-        </div>
-      </form>
-    </section>
+  const field = (label, name, type = "text", extra = {}) =>
+    h("div", { className: "field" },
+      h("label", null, label),
+      h("input", { name, type, value: form[name], onChange: change, ...extra })
+    );
+
+  return h("section", { className: "card", id: "form-section" },
+    h("h2", null, editing ? `Edit Student — ${editing.studentId}` : "Add New Student"),
+    h(Banner, { type: banner.type, message: banner.message }),
+    h("form", { onSubmit: submit, noValidate: true },
+      h("div", { className: "form-grid" },
+        field(h("span", null, "Student ID ", h("span", { className: "req" }, "*")), "studentId", "text",
+          { placeholder: "e.g. ST101", disabled: !!editing, required: true }),
+        field(h("span", null, "Full Name ", h("span", { className: "req" }, "*")), "name", "text",
+          { placeholder: "e.g. Rahul Sharma", required: true }),
+        field(h("span", null, "Email ", h("span", { className: "req" }, "*")), "email", "email",
+          { placeholder: "rahul@example.com", required: true }),
+        field(h("span", null, "Department ", h("span", { className: "req" }, "*")), "department", "text",
+          { placeholder: "e.g. CSE", required: true }),
+        field(h("span", null, "Semester ", h("span", { className: "req" }, "*"), " (1–12)"), "semester", "number",
+          { placeholder: "5", min: "1", max: "12", required: true }),
+        field(h("span", null, "Contact ", h("span", { className: "opt" }, "(optional)")), "contact", "text",
+          { placeholder: "+91 9876543210" }),
+      ),
+      h("div", { className: "form-actions" },
+        h("button", { type: "submit", className: "btn btn-primary", disabled: busy },
+          busy ? "Saving..." : editing ? "Update Student" : "Add Student"
+        ),
+        editing && h("button", { type: "button", className: "btn btn-secondary", onClick: onCancel }, "Cancel"),
+      )
+    )
   );
 }
 
+// ── Student Row ───────────────────────────────────────────
 function StudentRow({ s, onEdit, onDelete }) {
-  return (
-    <tr>
-      <td>{s.studentId}</td>
-      <td>{s.name}</td>
-      <td>{s.email}</td>
-      <td>{s.department}</td>
-      <td>{s.semester}</td>
-      <td>{s.contact || "—"}</td>
-      <td>
-        <div className="actions-cell">
-          <button className="btn btn-edit" onClick={() => onEdit(s)}>Edit</button>
-          <button className="btn btn-delete" onClick={() => onDelete(s.studentId, s.name)}>Delete</button>
-        </div>
-      </td>
-    </tr>
+  return h("tr", null,
+    h("td", null, s.studentId),
+    h("td", null, s.name),
+    h("td", null, s.email),
+    h("td", null, s.department),
+    h("td", null, s.semester),
+    h("td", null, s.contact || "—"),
+    h("td", null,
+      h("div", { className: "actions-cell" },
+        h("button", { className: "btn btn-edit", onClick: () => onEdit(s) }, "Edit"),
+        h("button", { className: "btn btn-delete", onClick: () => onDelete(s.studentId, s.name) }, "Delete"),
+      )
+    )
   );
 }
 
+// ── App (root) ────────────────────────────────────────────
 function App() {
   const [students, setStudents] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -185,83 +175,73 @@ function App() {
     }
   }
 
-  return (
-    <>
-      <header>
-        <div className="header-inner">
-          <span className="logo">🎓</span>
-          <div>
-            <h1>Student Information Management System</h1>
-            <p className="subtitle">Cloud Computing Mini Project · Netlify + Render + MongoDB Atlas</p>
-          </div>
-        </div>
-      </header>
+  function startEdit(student) {
+    setEditing(student);
+    document.getElementById("form-section")?.scrollIntoView({ behavior: "smooth" });
+  }
 
-      <main>
-        <StudentForm
-          editing={editing}
-          onSave={() => { setEditing(null); load(); }}
-          onCancel={() => { setEditing(null); setBanner({ type: "", message: "" }); }}
-          banner={banner}
-          setBanner={setBanner}
-        />
+  return h("div", null,
+    h("header", null,
+      h("div", { className: "header-inner" },
+        h("span", { className: "logo" }, "🎓"),
+        h("div", null,
+          h("h1", null, "Student Information Management System"),
+          h("p", { className: "subtitle" }, "Cloud Computing Mini Project · Netlify + Render + MongoDB Atlas"),
+        )
+      )
+    ),
 
-        <section className="card">
-          <div className="list-header">
-            <h2>All Students</h2>
-            <div className="search-box">
-              <input type="search" placeholder="Search by name..." onChange={handleSearch} aria-label="Search" />
-            </div>
-          </div>
+    h("main", null,
+      h(StudentForm, {
+        editing,
+        onSave: () => { setEditing(null); load(); },
+        onCancel: () => { setEditing(null); setBanner({ type: "", message: "" }); },
+        banner,
+        setBanner,
+      }),
 
-          {loading && (
-            <div className="loading">
-              <div className="spinner" />
-              <p>Loading...</p>
-            </div>
-          )}
+      h("section", { className: "card" },
+        h("div", { className: "list-header" },
+          h("h2", null, "All Students"),
+          h("div", { className: "search-box" },
+            h("input", { type: "search", placeholder: "Search by name...", onChange: handleSearch })
+          )
+        ),
 
-          {coldStart && (
-            <div className="cold-start">
-              Server is waking up (Render free tier). Please wait ~30 seconds and{" "}
-              <button className="btn-link" onClick={() => load()}>retry</button>.
-            </div>
-          )}
+        loading && h("div", { className: "loading" },
+          h("div", { className: "spinner" }),
+          h("p", null, "Loading...")
+        ),
 
-          {!loading && (
-            <div className="table-wrapper">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Student ID</th><th>Name</th><th>Email</th>
-                    <th>Department</th><th>Semester</th><th>Contact</th><th>Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {students.map(s => (
-                    <StudentRow
-                      key={s.studentId}
-                      s={s}
-                      onEdit={student => {
-                        setEditing(student);
-                        document.getElementById("form-section")?.scrollIntoView({ behavior: "smooth" });
-                      }}
-                      onDelete={handleDelete}
-                    />
-                  ))}
-                </tbody>
-              </table>
-              {students.length === 0 && !coldStart && <p className="empty-msg">No students found.</p>}
-            </div>
-          )}
-        </section>
-      </main>
+        coldStart && h("div", { className: "cold-start" },
+          "Server is waking up (Render free tier). Please wait ~30 seconds and ",
+          h("button", { className: "btn-link", onClick: () => load() }, "retry"), "."
+        ),
 
-      <footer>
-        <p>Student Information Management System &mdash; Cloud Computing Project</p>
-      </footer>
-    </>
+        !loading && h("div", { className: "table-wrapper" },
+          h("table", null,
+            h("thead", null,
+              h("tr", null,
+                ["Student ID","Name","Email","Department","Semester","Contact","Actions"]
+                  .map(col => h("th", { key: col }, col))
+              )
+            ),
+            h("tbody", null,
+              students.map(s =>
+                h(StudentRow, { key: s.studentId, s, onEdit: startEdit, onDelete: handleDelete })
+              )
+            )
+          ),
+          students.length === 0 && !coldStart &&
+            h("p", { className: "empty-msg" }, "No students found.")
+        )
+      )
+    ),
+
+    h("footer", null,
+      h("p", null, "Student Information Management System — Cloud Computing Project")
+    )
   );
 }
 
-ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+ReactDOM.createRoot(document.getElementById("root")).render(h(App, null));
