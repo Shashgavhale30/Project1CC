@@ -26,6 +26,11 @@ app.use(
     origin: function (origin, callback) {
       // Allow server-to-server requests (e.g., curl, Postman) where origin is undefined
       if (!origin) return callback(null, true);
+      // Allow file:// protocol locally: browsers send Origin: "null" for file:// pages.
+      // Block this in production (Render sets NODE_ENV=production) for security.
+      if (origin === "null" && process.env.NODE_ENV !== "production") {
+        return callback(null, true);
+      }
       if (allowedOrigins.includes(origin)) {
         return callback(null, true);
       }
