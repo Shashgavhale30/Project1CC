@@ -1,10 +1,6 @@
-# Netlify configuration for Project1CC
-
 [build]
   publish = "."
-  command = "echo 'No build required for static HTML/CSS/JS'"
 
-# Redirect all routes to index.html for single-page app behaviour
 [[redirects]]
   from = "/*"
   to = "/index.html"
