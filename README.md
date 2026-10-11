@@ -70,9 +70,10 @@ npm start
    - Root directory: `backend`
    - Build: `npm install` · Start: `npm start`
    - Env vars: `MONGODB_URI` and `FRONTEND_URL`
+   - `FRONTEND_URL` should be your Netlify origin, for example `https://project1cc.netlify.app`
 
 3. **Update** `const API` in `frontend/script.js` to your Render URL, commit and push.
 
 4. **Netlify** — import repo, base dir `frontend`, publish dir `frontend`, no build command.
 
-5. **Update** `FRONTEND_URL` on Render to your Netlify URL (no trailing slash), redeploy.
+5. **Update** `FRONTEND_URL` on Render to your Netlify URL (no trailing slash), then redeploy the backend.
