@@ -1,7 +1,7 @@
 {
-  "name": "student-system-backend",
-  "version": "1.0.0",
-  "description": "REST API backend for Student Information Management System",
+  "name": "contactflow-backend",
+  "version": "2.0.0",
+  "description": "REST API backend for ContactFlow — Contact Management System",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",

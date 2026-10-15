@@ -1,8 +1,8 @@
-# Student Information Management System
+# ContactFlow — Contact Management System
 
-A three-tier cloud web application for managing student records.
+A three-tier cloud web application for managing contact information for clients, colleagues, business partners and vendors.
 
-**Stack:** React (CDN) + Node.js/Express + MongoDB Atlas  
+**Stack:** React 18 (CDN, no build step) + Node.js/Express + MongoDB Atlas
 **Deployed on:** Netlify (frontend) · Render (backend) · MongoDB Atlas (database)
 
 ---
@@ -22,7 +22,7 @@ The frontend never connects to the database directly. All data goes through the 
 ```bash
 # 1. Clone and install
 git clone https://github.com/Shashgavhale30/Project1CC.git
-cd Project1CC/backend
+cd Project1CC/student-system/backend
 npm install
 
 # 2. Create backend/.env with these variables:
@@ -42,7 +42,7 @@ npm start
 
 | Variable | Description |
 |----------|-------------|
-| `MONGODB_URI` | Atlas connection string — `mongodb+srv://user:pass@cluster.mongodb.net/studentDB` |
+| `MONGODB_URI` | Atlas connection string — `mongodb+srv://user:pass@cluster.mongodb.net/contactflow` |
 | `FRONTEND_URL` | Allowed origin(s), comma-separated, no trailing slash |
 | `PORT` | Server port (Render sets this automatically) |
 
@@ -53,12 +53,28 @@ npm start
 | Method | Route | Description |
 |--------|-------|-------------|
 | GET | `/` | Health check |
-| GET | `/api/students` | Get all students |
-| GET | `/api/students?search=name` | Search by name |
-| GET | `/api/students/:id` | Get one student |
-| POST | `/api/students` | Add a student |
-| PUT | `/api/students/:id` | Update a student |
-| DELETE | `/api/students/:id` | Delete a student |
+| GET | `/api/contacts` | List contacts (supports `?search=` by name/email/company and `?category=`) |
+| GET | `/api/contacts/stats` | Dashboard summary (total contacts, companies, clients, recently added) |
+| GET | `/api/contacts/:id` | Get one contact by contactId |
+| POST | `/api/contacts` | Create a contact (contactId auto-generated if omitted) |
+| PUT | `/api/contacts/:id` | Update a contact (partial update supported) |
+| DELETE | `/api/contacts/:id` | Delete a contact |
+
+**Contact fields:** `contactId` (auto), `name`*, `email`*, `phone`, `company`*, `jobTitle`, `category`* (Client, Colleague, Business Partner, Vendor, Other), `notes` (* = required).
+
+> **Note on existing data:** the previous student collection is left untouched in the database. Student records are not compatible with the contact schema, so they were not migrated destructively. You can keep the old collection as an archive and add contacts fresh, or migrate manually once you approve it.
+
+---
+
+## Backend structure
+
+```
+backend/
+├── server.js                    # Express app, CORS, Mongo connection
+├── routes/contacts.js           # HTTP route handlers
+├── services/contactService.js   # Data operations & validation (reusable, e.g. for MCP)
+└── models/Contact.js            # Mongoose schema
+```
 
 ---
 
@@ -72,7 +88,7 @@ npm start
    - Env vars: `MONGODB_URI` and `FRONTEND_URL`
    - `FRONTEND_URL` should be your Netlify origin, for example `https://project1cc.netlify.app`
 
-3. **Update** `const API` in `frontend/script.js` to your Render URL, commit and push.
+3. **Update** `const API` in `frontend/script.js` to your Render URL + `/api/contacts`, commit and push.
 
 4. **Netlify** — import repo, base dir `frontend`, publish dir `frontend`, no build command.
 
