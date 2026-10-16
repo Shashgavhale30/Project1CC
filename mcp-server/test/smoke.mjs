@@ -9,6 +9,7 @@ import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js"
 
 const CATS = ["Client", "Colleague", "Business Partner", "Vendor", "Other"];
 const db = [];
+let seq = 0;
 
 // Mock mirrors backend/routes/contacts.js behaviour (validation, 409 on duplicate email, 404s).
 const mock = http.createServer((req, res) => {
@@ -39,7 +40,7 @@ const mock = http.createServer((req, res) => {
         return send(400, { error: "Validation failed." });
       if (db.some((c) => c.email === body.email.toLowerCase()))
         return send(409, { error: "A contact with this ID or email already exists." });
-      const c = { contactId: "CT-" + (db.length + 1), ...body, email: body.email.toLowerCase() };
+      const c = { contactId: "CT-" + ++seq, ...body, email: body.email.toLowerCase() };
       db.push(c);
       return send(201, c);
     }
@@ -48,6 +49,12 @@ const mock = http.createServer((req, res) => {
       if (!c) return send(404, { error: "Contact not found" });
       Object.assign(c, body);
       return send(200, c);
+    }
+    if (req.method === "DELETE" && m) {
+      const i = db.findIndex((x) => x.contactId === m[1]);
+      if (i < 0) return send(404, { error: "Contact not found" });
+      db.splice(i, 1);
+      return send(200, { message: `Contact '${m[1]}' deleted` });
     }
     send(404, { error: "API route not found" });
   });
@@ -75,7 +82,9 @@ const call = async (name, args = {}) => {
 
 try {
   const tools = (await client.listTools()).tools.map((t) => t.name).sort();
-  assert.deepEqual(tools, ["add_contact", "add_contacts_bulk", "get_contact", "get_stats", "list_contacts", "update_contact"]);
+  assert.deepEqual(tools, ["add_contact", "add_contacts_bulk", "delete_contact", "get_contact", "get_stats", "list_contacts", "update_contact"]);
+  const del = (await client.listTools()).tools.find((t) => t.name === "delete_contact");
+  assert.equal(del.annotations.destructiveHint, true);
 
   let r = await call("add_contact", { name: "Asha Rao", email: "Asha@Example.com", company: "Acme", category: "Client", jobTitle: "CTO" });
   assert.ok(!r.isError); assert.equal(r.json.contact.email, "asha@example.com");
@@ -109,7 +118,16 @@ try {
   r = await call("get_stats");
   assert.equal(r.json.totalContacts, 3);
 
-  console.log("All MCP tool checks passed (6 tools).");
+  r = await call("delete_contact", { contactId: id });
+  assert.ok(!r.isError); assert.equal(r.json.deleted.email, "asha@example.com");
+  r = await call("get_contact", { contactId: id });
+  assert.ok(r.isError); // really gone
+  r = await call("delete_contact", { contactId: id });
+  assert.ok(r.isError); assert.match(r.text, /not found/i); // second delete fails cleanly
+  r = await call("get_stats");
+  assert.equal(r.json.totalContacts, 2);
+
+  console.log("All MCP tool checks passed (7 tools).");
 } finally {
   await client.close();
   mock.close();

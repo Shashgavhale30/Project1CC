@@ -13,11 +13,12 @@ It talks to the **deployed backend API** (not MongoDB directly), so you don't ne
 | `list_contacts` | Search by name/email/company and/or filter by category (use it to avoid duplicates) |
 | `get_contact` | Fetch one contact by `contactId` |
 | `update_contact` | Partial update by `contactId` |
+| `delete_contact` | Permanently delete one contact by `contactId` (returns what was removed) |
 | `get_stats` | Dashboard numbers (total, companies, clients, recently added) |
 
 Valid categories: `Client`, `Colleague`, `Business Partner`, `Vendor`, `Other`.
 
-There is deliberately no delete tool, so a prompt can't remove data by accident.
+`delete_contact` is marked as destructive, so Claude Desktop asks for your approval on each call, and the tool tells Claude to confirm ambiguous requests first. Deletes cannot be undone. To delete several contacts, ask Claude and approve each call.
 
 ## Setup
 

@@ -208,6 +208,25 @@ server.registerTool(
     }),
 );
 
+server.registerTool(
+  "delete_contact",
+  {
+    title: "Delete a contact",
+    description:
+      "PERMANENTLY delete one contact by contactId. This cannot be undone. If the person only gave a name or email, find the contactId with list_contacts first, and if more than one contact could match or the request is vague, confirm which one with the person before deleting. Returns the contact that was removed.",
+    inputSchema: { contactId: z.string().min(1).describe("The contactId of the contact to delete") },
+    annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
+  },
+  ({ contactId }) =>
+    guarded(async () => {
+      const path = `/${encodeURIComponent(contactId)}`;
+      // Fetch first so the result says exactly what was removed (and a missing ID fails cleanly).
+      const existing = await api(path);
+      await api(path, { method: "DELETE" });
+      return ok({ message: "Contact deleted.", deleted: existing });
+    }),
+);
+
 // ── Start ──────────────────────────────────────────────────
 await server.connect(new StdioServerTransport());
 console.error(`ContactFlow MCP server running (API: ${API})`);
