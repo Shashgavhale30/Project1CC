@@ -1,219 +1,213 @@
-import { Server } from "@modelcontextprotocol/sdk/server/index.js";
-import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import {
-  CallToolRequestSchema,
-  ListToolsRequestSchema,
-} from "@modelcontextprotocol/sdk/types.js";
-import axios from "axios";
-import fs from "fs/promises";
-import path from "path";
-import { execFile } from "child_process";
-import { promisify } from "util";
+require("dotenv").config();
+const express = require("express");
+const mongoose = require("mongoose");
+const cors = require("cors");
+const rateLimit = require("express-rate-limit");
+const { GoogleGenerativeAI } = require("@google/generative-ai");
 
-const execFileAsync = promisify(execFile);
+const Contact = require("./models/Contact");
+const contactsRouter = require("./routes/contacts");
 
-const API_URL =
-  process.env.CONTACTFLOW_API_URL ||
-  "https://project1cc-backend.onrender.com/api/contacts";
-const API_TOKEN = process.env.CONTACTFLOW_API_TOKEN || "";
-const PROJECT_ROOT = path.resolve(process.env.PROJECT_ROOT || "D:\\Project1CC");
+const app = express();
+const PORT = process.env.PORT || 5000;
 
-// Files/folders the AI must never write to
-const BLOCKED = [".git", "node_modules", ".env", ".mcp.json"];
+// Render sits behind a proxy; needed for correct client IPs in rate limiting
+app.set("trust proxy", 1);
 
-const api = axios.create({
-  timeout: 60000, // Render free tier cold start
-  headers: API_TOKEN ? { Authorization: `Bearer ${API_TOKEN}` } : {},
-});
+const DEFAULT_ALLOWED_ORIGINS = ["https://project1cc.netlify.app"];
 
-// Resolve a relative path and make sure it stays inside PROJECT_ROOT
-function safePath(relPath) {
-  const full = path.resolve(PROJECT_ROOT, relPath);
-  const rel = path.relative(PROJECT_ROOT, full);
-  if (rel.startsWith("..") || path.isAbsolute(rel)) {
-    throw new Error("Path is outside the project directory");
-  }
-  const parts = rel.split(path.sep).map((p) => p.toLowerCase());
-  if (parts.some((p) => BLOCKED.includes(p) || p.startsWith(".env"))) {
-    throw new Error(`Writing to "${rel}" is blocked`);
-  }
-  return full;
+function normalizeOrigin(origin) {
+  return origin.trim().replace(/\/+$/, "");
 }
 
-async function git(...gitArgs) {
-  return execFileAsync("git", gitArgs, { cwd: PROJECT_ROOT, windowsHide: true });
-}
+const allowedOrigins = new Set([
+  ...DEFAULT_ALLOWED_ORIGINS,
+  ...(process.env.FRONTEND_URL || "")
+    .split(",")
+    .map((o) => normalizeOrigin(o))
+    .filter(Boolean),
+]);
 
-const text = (t) => ({ content: [{ type: "text", text: t }] });
+const isLocalOrigin = (o) => /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(o);
 
-const server = new Server(
-  { name: "project1cc-mcp-server", version: "1.1.0" },
-  { capabilities: { tools: {} } }
+app.use(
+  cors({
+    // No Origin header (MCP server, curl, Postman) is allowed through
+    origin: (origin, cb) => {
+      if (!origin) return cb(null, true);
+      const normalizedOrigin = normalizeOrigin(origin);
+      if (
+        process.env.NODE_ENV !== "production" &&
+        (normalizedOrigin === "null" || isLocalOrigin(normalizedOrigin))
+      )
+        return cb(null, true);
+      if (allowedOrigins.has(normalizedOrigin)) return cb(null, true);
+      cb(new Error("CORS: origin not allowed"));
+    },
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+  })
 );
 
-server.setRequestHandler(ListToolsRequestSchema, async () => ({
-  tools: [
-    // 1. CONTACTS CRUD
-    {
-      name: "get_contacts",
-      description: "Retrieve all contacts from the backend API.",
-      inputSchema: { type: "object", properties: {} },
-    },
-    {
-      name: "add_contact",
-      description: "Add a new contact to the backend.",
-      inputSchema: {
-        type: "object",
-        properties: {
-          name: { type: "string" },
-          email: { type: "string" },
-          phone: { type: "string" },
-        },
-        required: ["name"],
-      },
-    },
-    {
-      name: "update_contact",
-      description: "Update an existing contact by ID.",
-      inputSchema: {
-        type: "object",
-        properties: {
-          id: { type: "string" },
-          name: { type: "string" },
-          email: { type: "string" },
-          phone: { type: "string" },
-        },
-        required: ["id"],
-      },
-    },
-    {
-      name: "delete_contact",
-      description: "Delete a contact by ID.",
-      inputSchema: {
-        type: "object",
-        properties: { id: { type: "string" } },
-        required: ["id"],
-      },
-    },
+app.use(express.json({ limit: "100kb" }));
 
-    // 2. FILE TOOLS
-    {
-      name: "read_project_file",
-      description:
-        "Read a file in the Project1CC directory. Always read a file before editing it.",
-      inputSchema: {
-        type: "object",
-        properties: {
-          filePath: {
-            type: "string",
-            description: "Relative path from project root, e.g. 'backend/server.js'",
-          },
-        },
-        required: ["filePath"],
-      },
-    },
-    {
-      name: "edit_project_file",
-      description:
-        "Create or overwrite a file in the Project1CC directory (frontend or backend). Send the COMPLETE new file content.",
-      inputSchema: {
-        type: "object",
-        properties: {
-          filePath: {
-            type: "string",
-            description: "Relative path from project root, e.g. 'frontend/src/App.jsx'",
-          },
-          content: { type: "string", description: "Complete new content for the file" },
-        },
-        required: ["filePath", "content"],
-      },
-    },
-
-    // 3. GIT
-    {
-      name: "git_status",
-      description: "Show git status of the project (changed files, current branch).",
-      inputSchema: { type: "object", properties: {} },
-    },
-    {
-      name: "git_commit_and_push",
-      description:
-        "Stage all changes, commit with a message, and push the current branch to GitHub.",
-      inputSchema: {
-        type: "object",
-        properties: {
-          commitMessage: {
-            type: "string",
-            description: "Commit message describing the changes",
-          },
-        },
-        required: ["commitMessage"],
-      },
-    },
-  ],
-}));
-
-server.setRequestHandler(CallToolRequestSchema, async (request) => {
-  const { name, arguments: args = {} } = request.params;
-
-  try {
-    switch (name) {
-      case "get_contacts": {
-        const res = await api.get(API_URL);
-        return text(JSON.stringify(res.data, null, 2));
-      }
-      case "add_contact": {
-        const res = await api.post(API_URL, args);
-        return text(`Added contact: ${JSON.stringify(res.data)}`);
-      }
-      case "update_contact": {
-        const { id, ...updateData } = args;
-        const res = await api.put(`${API_URL}/${encodeURIComponent(id)}`, updateData);
-        return text(`Updated contact: ${JSON.stringify(res.data)}`);
-      }
-      case "delete_contact": {
-        await api.delete(`${API_URL}/${encodeURIComponent(args.id)}`);
-        return text(`Deleted contact with ID: ${args.id}`);
-      }
-
-      case "read_project_file": {
-        const full = path.resolve(PROJECT_ROOT, args.filePath);
-        const rel = path.relative(PROJECT_ROOT, full);
-        if (rel.startsWith("..") || path.isAbsolute(rel))
-          throw new Error("Path is outside the project directory");
-        if (rel.split(path.sep).some((p) => p.toLowerCase().startsWith(".env")))
-          throw new Error("Reading .env files is blocked");
-        return text(await fs.readFile(full, "utf8"));
-      }
-      case "edit_project_file": {
-        const full = safePath(args.filePath);
-        await fs.mkdir(path.dirname(full), { recursive: true });
-        await fs.writeFile(full, args.content, "utf8");
-        return text(`Wrote file: ${args.filePath}`);
-      }
-
-      case "git_status": {
-        const { stdout } = await git("status", "--short", "--branch");
-        return text(stdout || "Working tree clean");
-      }
-      case "git_commit_and_push": {
-        await git("add", "-A");
-        const { stdout: staged } = await git("status", "--porcelain");
-        if (!staged.trim()) return text("Nothing to commit, working tree clean.");
-        await git("commit", "-m", args.commitMessage);
-        const { stdout, stderr } = await git("push", "origin", "HEAD");
-        return text(`Committed and pushed.\n${stdout}${stderr}`);
-      }
-
-      default:
-        throw new Error(`Unknown tool: ${name}`);
-    }
-  } catch (error) {
-    const detail = error.response
-      ? `${error.response.status}: ${JSON.stringify(error.response.data)}`
-      : error.stderr || error.message;
-    return { content: [{ type: "text", text: `Error in ${name}: ${detail}` }], isError: true };
-  }
+// Health check
+app.get("/", (req, res) => {
+  res.json({ status: "ok", message: "ContactFlow API running" });
 });
 
-await server.connect(new StdioServerTransport());
+// Standard CRUD routes (also used by the MCP server)
+app.use("/api/contacts", contactsRouter);
+
+// ==========================================
+// Gemini AI natural-language endpoint
+// ==========================================
+const genAI = process.env.GEMINI_API_KEY
+  ? new GoogleGenerativeAI(process.env.GEMINI_API_KEY)
+  : null;
+
+const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-2.5-flash";
+const ALLOWED_ACTIONS = new Set(["CREATE", "READ", "UPDATE", "DELETE"]);
+const ALLOWED_FIELDS = ["name", "email", "phone"];
+
+const aiLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many AI requests, slow down" },
+});
+
+// Keep only whitelisted string fields (blocks NoSQL operator injection like {"$ne": ""})
+function sanitizeData(data) {
+  const clean = {};
+  if (!data || typeof data !== "object") return clean;
+  for (const key of ALLOWED_FIELDS) {
+    const val = data[key];
+    if (typeof val === "string" && val.trim()) clean[key] = val.trim();
+  }
+  return clean;
+}
+
+// Case-insensitive exact match on name
+const byName = (name) => ({ name });
+const NAME_COLLATION = { locale: "en", strength: 2 };
+
+const SYSTEM_INSTRUCTION = `
+You are a contact manager API assistant. Convert the user's request into this strict JSON:
+{
+  "action": "CREATE" | "READ" | "UPDATE" | "DELETE",
+  "data": { "name": "...", "email": "...", "phone": "..." }
+}
+Rules:
+- Return only JSON.
+- "name" identifies the contact. For UPDATE, put the new values in email/phone.
+- READ with no name means list all contacts.
+- Extract only what the user provided. Never invent details.
+`;
+
+app.post("/api/ai-command", aiLimiter, async (req, res) => {
+  const { prompt } = req.body || {};
+  if (typeof prompt !== "string" || !prompt.trim())
+    return res.status(400).json({ error: "Prompt is required" });
+  if (prompt.length > 500)
+    return res.status(400).json({ error: "Prompt too long (max 500 chars)" });
+  if (!genAI)
+    return res.status(503).json({ error: "AI service not configured" });
+
+  try {
+    const model = genAI.getGenerativeModel({
+      model: GEMINI_MODEL,
+      generationConfig: { responseMimeType: "application/json" },
+    });
+
+    const result = await model.generateContent(
+      `${SYSTEM_INSTRUCTION}\n\nUser request: ${prompt}`
+    );
+
+    let aiResponse;
+    try {
+      aiResponse = JSON.parse(result.response.text());
+    } catch {
+      return res.status(502).json({ error: "AI returned invalid JSON" });
+    }
+
+    const action = String(aiResponse.action || "").toUpperCase();
+    if (!ALLOWED_ACTIONS.has(action))
+      return res.status(400).json({ error: "AI returned an unknown action" });
+
+    const data = sanitizeData(aiResponse.data);
+
+    if (action === "CREATE") {
+      if (!data.name)
+        return res.status(400).json({ error: "Name is required to create a contact" });
+      const contact = await Contact.create(data);
+      return res.status(201).json({
+        message: `Successfully added ${contact.name}`,
+        action,
+        data: contact,
+      });
+    }
+
+    if (action === "READ") {
+      const contacts = data.name
+        ? await Contact.find(byName(data.name)).collation(NAME_COLLATION)
+        : await Contact.find();
+      return res.json({ message: `Found ${contacts.length} contact(s)`, action, data: contacts });
+    }
+
+    // UPDATE and DELETE both need a name to target
+    if (!data.name)
+      return res.status(400).json({ error: "Name is required to identify the contact" });
+
+    if (action === "UPDATE") {
+      const { name, ...changes } = data;
+      if (!Object.keys(changes).length)
+        return res.status(400).json({ error: "Nothing to update" });
+      const updated = await Contact.findOneAndUpdate(
+        byName(name),
+        { $set: changes },
+        { new: true, runValidators: true, collation: NAME_COLLATION }
+      );
+      if (!updated) return res.status(404).json({ error: `Contact "${name}" not found` });
+      return res.json({ message: `Successfully updated ${updated.name}`, action, data: updated });
+    }
+
+    if (action === "DELETE") {
+      const deleted = await Contact.findOneAndDelete(byName(data.name), {
+        collation: NAME_COLLATION,
+      });
+      if (!deleted) return res.status(404).json({ error: `Contact "${data.name}" not found` });
+      return res.json({ message: `Successfully deleted ${deleted.name}`, action, name: deleted.name });
+    }
+  } catch (error) {
+    console.error("AI Error:", error.message);
+    res.status(500).json({ error: "Failed to process AI command" });
+  }
+});
+// ==========================================
+
+// 404 for unknown API routes
+app.use("/api", (req, res) => {
+  res.status(404).json({ error: "API route not found" });
+});
+
+// Central error handler: never leaks stack traces or connection details
+app.use((err, req, res, next) => {
+  if (err && err.message && err.message.startsWith("CORS:")) {
+    return res.status(403).json({ error: "Origin not allowed by CORS policy" });
+  }
+  console.error("Unhandled error:", err && err.message);
+  res.status(500).json({ error: "Internal server error" });
+});
+
+mongoose
+  .connect(process.env.MONGODB_URI)
+  .then(() => {
+    console.log("Connected to MongoDB Atlas");
+    app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+  })
+  .catch((err) => {
+    console.error("MongoDB connection failed:", err.message);
+    process.exit(1);
+  });
