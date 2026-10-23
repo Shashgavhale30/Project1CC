@@ -177,12 +177,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       case "read_project_file": {
-        const full = path.resolve(PROJECT_ROOT, args.filePath);
-        const rel = path.relative(PROJECT_ROOT, full);
-        if (rel.startsWith("..") || path.isAbsolute(rel))
-          throw new Error("Path is outside the project directory");
-        if (rel.split(path.sep).some((p) => p.toLowerCase().startsWith(".env")))
-          throw new Error("Reading .env files is blocked");
+        const full = safePath(args.filePath);
         return text(await fs.readFile(full, "utf8"));
       }
       case "edit_project_file": {
@@ -196,14 +191,26 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const { stdout } = await git("status", "--short", "--branch");
         return text(stdout || "Working tree clean");
       }
+
       case "git_commit_and_push": {
-        await git("add", "-A");
-        const { stdout: staged } = await git("status", "--porcelain");
-        if (!staged.trim()) return text("Nothing to commit, working tree clean.");
+        if (!args.commitMessage?.trim()) {
+          throw new Error("Commit message is required.");
+        }
+
+        const { stdout: staged } = await git("diff", "--cached", "--name-only");
+
+        if (!staged.trim()) {
+          return text(
+            "Nothing staged. Review your changes and run git add <files> first."
+          );
+        }
+
         await git("commit", "-m", args.commitMessage);
         const { stdout, stderr } = await git("push", "origin", "HEAD");
-        return text(`Committed and pushed.\n${stdout}${stderr}`);
+
+        return text(`Committed and pushed staged changes.\n${stdout}${stderr}`);
       }
+
 
       default:
         throw new Error(`Unknown tool: ${name}`);
