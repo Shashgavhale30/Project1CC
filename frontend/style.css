@@ -1,29 +1,29 @@
 /* ============================================================
    ContactFlow — Contact Management System
-   "Paper & Ink" theme - cream paper, serif display, forest green
+   "Night Ink" theme - dark paper, serif display, forest green
    ============================================================ */
 
 :root {
-  --bg: #f3eee4;
-  --surface: #fbf8f1;
-  --border: #d8cfbd;
-  --border-strong: #b9ac93;
-  --text: #2b2620;
-  --text-secondary: #6b6355;
-  --text-muted: #9a8f7d;
-  --accent: #1e5c47;
-  --accent-hover: #164a39;
-  --accent-soft: #e3ecdd;
-  --pop: #b4552d;
-  --pop-soft: #f6e3d8;
-  --danger: #a03325;
-  --danger-soft: #f7e2dc;
-  --success: #2e6b3f;
-  --success-soft: #e4efdf;
+  --bg: #1a1816;
+  --surface: #24211d;
+  --border: #3a352e;
+  --border-strong: #524a3f;
+  --text: #efe9db;
+  --text-secondary: #b9ac93;
+  --text-muted: #8a8272;
+  --accent: #4a9b7f;
+  --accent-hover: #5fb89a;
+  --accent-soft: #1f3a30;
+  --pop: #d97757;
+  --pop-soft: #3a2a22;
+  --danger: #d45a4a;
+  --danger-soft: #3a2220;
+  --success: #5a9b6f;
+  --success-soft: #223328;
   --radius: 4px;
   --radius-sm: 3px;
   --shadow: 3px 3px 0 var(--border-strong);
-  --shadow-lg: 6px 6px 0 rgba(43, 38, 32, 0.18);
+  --shadow-lg: 6px 6px 0 rgba(0, 0, 0, 0.45);
   --sidebar-w: 236px;
 }
 
@@ -34,7 +34,7 @@ html, body { height: 100%; }
 body {
   font-family: "Libre Franklin", Georgia, "Times New Roman", serif;
   background: var(--bg);
-  background-image: radial-gradient(rgba(43, 38, 32, 0.04) 1px, transparent 1px);
+  background-image: radial-gradient(rgba(239, 233, 219, 0.04) 1px, transparent 1px);
   background-size: 22px 22px;
   color: var(--text);
   font-size: 14.5px;
@@ -51,7 +51,7 @@ h1, h2, h3, .brand-name, .stat-value { font-family: "Fraunces", Georgia, "Times 
 
 .sidebar {
   width: var(--sidebar-w);
-  background: var(--text);
+  background: #0f0d0b;
   color: #efe9db;
   border-right: 3px solid var(--accent);
   padding: 22px 16px;
@@ -114,7 +114,7 @@ h1, h2, h3, .brand-name, .stat-value { font-family: "Fraunces", Georgia, "Times 
   align-items: center;
   gap: 12px;
   padding: 12px 20px;
-  background: var(--text);
+  background: #0f0d0b;
   color: #efe9db;
   border-bottom: 3px solid var(--accent);
   position: sticky; top: 0; z-index: 40;
@@ -123,7 +123,7 @@ h1, h2, h3, .brand-name, .stat-value { font-family: "Fraunces", Georgia, "Times 
 .menu-btn {
   display: flex; align-items: center; justify-content: center;
   width: 36px; height: 36px;
-  border: 1px solid #5a5344;
+  border: 1px solid var(--border-strong);
   border-radius: var(--radius-sm);
   background: transparent;
   color: #efe9db;
@@ -269,8 +269,8 @@ h1 { font-size: 32px; font-weight: 700; letter-spacing: -0.3px; }
   border-style: solid;
 }
 
-.banner.success { background: var(--success-soft); color: var(--success); border-color: #a9c6a0; }
-.banner.error   { background: var(--danger-soft);  color: var(--danger);  border-color: #d9a89d; }
+.banner.success { background: var(--success-soft); color: var(--success); border-color: #4a6b45; }
+.banner.error   { background: var(--danger-soft);  color: var(--danger);  border-color: #7a4a42; }
 
 /* ── Form ───────────────────────────────────────────────── */
 .form-grid {
@@ -301,7 +301,7 @@ h1 { font-size: 32px; font-weight: 700; letter-spacing: -0.3px; }
   padding: 9px 12px;
   border: 1.5px solid var(--border-strong);
   border-radius: var(--radius-sm);
-  background: #fffdf8;
+  background: #2a2622;
   color: var(--text);
   transition: border-color 0.15s, box-shadow 0.15s;
 }
@@ -338,21 +338,21 @@ h1 { font-size: 32px; font-weight: 700; letter-spacing: -0.3px; }
 
 .btn:disabled { opacity: 0.6; cursor: not-allowed; }
 
-.btn-primary { background: var(--accent); color: #fdf9ef; box-shadow: 2px 2px 0 rgba(43, 38, 32, 0.25); }
+.btn-primary { background: var(--accent); color: #fdf9ef; box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.35); }
 .btn-primary:hover:not(:disabled) { background: var(--accent-hover); }
 
 .btn-secondary {
   background: var(--surface); color: var(--text);
   border-color: var(--border-strong);
-  box-shadow: 2px 2px 0 rgba(43, 38, 32, 0.15);
+  box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.3);
 }
 .btn-secondary:hover:not(:disabled) { background: var(--accent-soft); }
 
 .btn-ghost { background: none; color: var(--text-secondary); }
 .btn-ghost:hover:not(:disabled) { background: var(--border); color: var(--text); }
 
-.btn-danger { background: var(--danger); color: #fdf9ef; box-shadow: 2px 2px 0 rgba(43, 38, 32, 0.25); }
-.btn-danger:hover:not(:disabled) { background: #8a2a1e; }
+.btn-danger { background: var(--danger); color: #fdf9ef; box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.35); }
+.btn-danger:hover:not(:disabled) { background: #b03026; }
 
 .btn-sm { padding: 6px 12px; font-size: 13px; }
 
@@ -388,7 +388,7 @@ td {
 tbody tr:last-child td { border-bottom: none; }
 
 tbody tr { transition: background 0.12s; }
-tbody tr:hover { background: #f1ead9; }
+tbody tr:hover { background: #2e2a25; }
 
 .person { display: flex; align-items: center; gap: 10px; }
 
@@ -440,10 +440,10 @@ tbody tr:hover { background: #f1ead9; }
 }
 
 .badge-client           { background: var(--accent-soft); color: var(--accent); }
-.badge-colleague        { background: #e4efdf; color: #2e6b3f; }
+.badge-colleague        { background: var(--success-soft); color: var(--success); }
 .badge-business-partner { background: var(--pop-soft); color: var(--pop); }
-.badge-vendor           { background: #eee6f5; color: #5b3d9e; }
-.badge-other            { background: #ece6da; color: var(--text-secondary); }
+.badge-vendor           { background: #2e2638; color: #b8a3e0; }
+.badge-other            { background: #2a2622; color: var(--text-secondary); }
 
 /* ── Mobile contact cards ───────────────────────────────── */
 .card-list { display: none; }
@@ -512,7 +512,7 @@ tbody tr:hover { background: #f1ead9; }
 /* ── Modal ──────────────────────────────────────────────── */
 .overlay {
   position: fixed; inset: 0;
-  background: rgba(43, 38, 32, 0.55);
+  background: rgba(0, 0, 0, 0.6);
   display: flex; align-items: center; justify-content: center;
   padding: 20px;
   z-index: 100;
@@ -549,7 +549,7 @@ tbody tr:hover { background: #f1ead9; }
     box-shadow: var(--shadow-lg);
   }
   .sidebar.open { transform: translateX(0); }
-  .nav-backdrop { display: block; position: fixed; inset: 0; background: rgba(43, 38, 32, 0.5); z-index: 80; }
+  .nav-backdrop { display: block; position: fixed; inset: 0; background: rgba(0, 0, 0, 0.55); z-index: 80; }
   .topbar { display: flex; }
   .brand-mobile { display: flex; }
   .table-wrapper { display: none; }

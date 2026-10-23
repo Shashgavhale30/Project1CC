@@ -12,7 +12,9 @@
     "test": "node test/smoke.mjs"
   },
   "dependencies": {
+    "@google/genai": "^2.31.0",
     "@modelcontextprotocol/sdk": "^1.32.1",
+    "axios": "^1.20.0",
     "zod": "^4.6.7"
   },
   "engines": {

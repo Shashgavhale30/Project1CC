@@ -1,13 +1,20 @@
 // Backend API base URL: Render deployment in production,
 // local dev server when the page itself is served from localhost
 const isLocal = ["localhost", "127.0.0.1"].includes(window.location.hostname);
-const API = isLocal
-  ? "http://localhost:5000/api/contacts"
-  : "https://project1cc-backend.onrender.com/api/contacts";
+const API_ROOT = isLocal
+  ? "http://localhost:5000/api"
+  : "https://project1cc-backend.onrender.com/api";
+const API = `${API_ROOT}/contacts`;
+const FAMILY_API = `${API_ROOT}/family`;
 
 const { useState, useEffect, useRef, useCallback, createElement: h } = React;
 
 const CATEGORIES = ["Client", "Colleague", "Business Partner", "Vendor", "Other"];
+
+const RELATIONSHIPS = [
+  "Spouse", "Parent", "Child", "Sibling", "Grandparent",
+  "Grandchild", "Uncle/Aunt", "Cousin", "In-law", "Other",
+];
 
 const EMPTY = {
   name: "",
@@ -19,7 +26,17 @@ const EMPTY = {
   notes: "",
 };
 
-// â”€â”€ Small icon set (inline SVG, no dependency) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+const FAMILY_EMPTY = {
+  name: "",
+  relationship: "",
+  email: "",
+  phone: "",
+  birthday: "",
+  address: "",
+  notes: "",
+};
+
+// ---- Small icon set (inline SVG, no dependency) ----
 function Icon({ name, size = 18 }) {
   const paths = {
     dashboard: h("path", { d: "M3 3h8v8H3zM13 3h8v5h-8zM13 10h8v11h-8zM3 13h8v8H3z" }),
@@ -30,6 +47,7 @@ function Icon({ name, size = 18 }) {
     trash: h("path", { d: "M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 11v6M14 11v6" }),
     building: h("path", { d: "M4 21V5a2 2 0 012-2h8a2 2 0 012 2v16M16 9h3a1 1 0 011 1v11M8 7h4M8 11h4M8 15h4M2 21h20" }),
     users: h("path", { d: "M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2M9 11a4 4 0 100-8 4 4 0 000 8M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75" }),
+    family: h("path", { d: "M3 11l9-8 9 8M5 10v10h14V10M10 20v-5h4v5" }),
     clock: h("path", { d: "M12 22a10 10 0 100-20 10 10 0 000 20zM12 6v6l4 2" }),
     grid: h("path", { d: "M3 3h7v7H3zM14 3h7v7h-7zM14 14h7v7h-7zM3 14h7v7H3z" }),
     menu: h("path", { d: "M3 6h18M3 12h18M3 18h18" }),
@@ -54,13 +72,13 @@ function Icon({ name, size = 18 }) {
   );
 }
 
-// â”€â”€ Banner (success / error feedback) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ---- Banner (success / error feedback) ----
 function Banner({ type, message }) {
   if (!type || !message) return null;
   return h("div", { className: `banner ${type}`, role: "alert" }, message);
 }
 
-// â”€â”€ Stat card â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ---- Stat card ----
 function StatCard({ label, value, icon }) {
   return h("div", { className: "stat-card" },
     h("div", { className: "stat-icon" }, h(Icon, { name: icon })),
@@ -71,7 +89,7 @@ function StatCard({ label, value, icon }) {
   );
 }
 
-// â”€â”€ Contact form (add / edit) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ---- Contact form (add / edit) ----
 function ContactForm({ editing, onSave, onCancel, banner, setBanner }) {
   const [form, setForm] = useState(EMPTY);
   const [busy, setBusy] = useState(false);
@@ -186,19 +204,19 @@ function ContactForm({ editing, onSave, onCancel, banner, setBanner }) {
   );
 }
 
-// â”€â”€ Category badge â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ---- Category badge ----
 function CategoryBadge({ category }) {
   if (!category) return h("span", null, "—");
   const key = category.toLowerCase().replace(/\s+/g, "-");
   return h("span", { className: `badge badge-${key}` }, category);
 }
 
-// â”€â”€ Avatar initials â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ---- Avatar initials ----
 function initials(name) {
   return name.trim().split(/\s+/).slice(0, 2).map(w => w[0].toUpperCase()).join("");
 }
 
-// â”€â”€ Contact row (desktop table) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ---- Contact row (desktop table) ----
 function ContactRow({ c, onEdit, onDelete }) {
   return h("tr", null,
     h("td", null,
@@ -226,7 +244,7 @@ function ContactRow({ c, onEdit, onDelete }) {
   );
 }
 
-// â”€â”€ Contact card (mobile) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ---- Contact card (mobile) ----
 function ContactCard({ c, onEdit, onDelete }) {
   return h("div", { className: "contact-card" },
     h("div", { className: "contact-card-top" },
@@ -249,25 +267,320 @@ function ContactCard({ c, onEdit, onDelete }) {
   );
 }
 
-// â”€â”€ Delete confirmation dialog â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-function ConfirmDelete({ contact, busy, onConfirm, onCancel }) {
+// ---- Delete confirmation dialog (contacts and family members) ----
+function ConfirmDelete({ contact, busy, onConfirm, onCancel, kind = "contact" }) {
+  const id = contact.contactId || contact.familyId;
   return h("div", { className: "overlay", onClick: (e) => { if (e.target === e.currentTarget) onCancel(); } },
     h("div", { className: "modal", role: "dialog", "aria-modal": "true" },
-      h("h3", null, "Delete contact"),
+      h("h3", null, `Delete ${kind}`),
       h("p", null,
         "Are you sure you want to delete ",
         h("strong", null, contact.name),
-        ` (${contact.contactId})? This action cannot be undone.`),
+        ` (${id})? This action cannot be undone.`),
       h("div", { className: "modal-actions" },
         h("button", { className: "btn btn-ghost", onClick: onCancel, disabled: busy }, "Cancel"),
         h("button", { className: "btn btn-danger", onClick: onConfirm, disabled: busy },
-          busy ? "Deleting…" : "Delete Contact"),
+          busy ? "Deleting…" : `Delete ${kind.charAt(0).toUpperCase() + kind.slice(1)}`),
       )
     )
   );
 }
 
-// â”€â”€ App (root) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ---- Family: helpers ----
+function formatBirthday(value) {
+  if (!value) return "—";
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return "—";
+  return d.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
+}
+
+// ---- Family form (add / edit) ----
+function FamilyForm({ editing, onSave, onCancel }) {
+  const [form, setForm] = useState(FAMILY_EMPTY);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    setError("");
+    setForm(editing
+      ? {
+          name: editing.name || "",
+          relationship: editing.relationship || "",
+          email: editing.email || "",
+          phone: editing.phone || "",
+          birthday: editing.birthday ? String(editing.birthday).slice(0, 10) : "",
+          address: editing.address || "",
+          notes: editing.notes || "",
+        }
+      : FAMILY_EMPTY
+    );
+  }, [editing]);
+
+  function change(e) {
+    setForm(f => ({ ...f, [e.target.name]: e.target.value }));
+  }
+
+  function validate() {
+    if (!form.name.trim()) return "Full name is required.";
+    if (!RELATIONSHIPS.includes(form.relationship)) return "Please select a relationship.";
+    if (form.email.trim() && !/\S+@\S+\.\S+/.test(form.email)) return "Please enter a valid email address.";
+    if (form.phone.trim().length > 30) return "Phone number is too long.";
+    return null;
+  }
+
+  async function submit(e) {
+    e.preventDefault();
+    const err = validate();
+    if (err) { setError(err); return; }
+    setError("");
+    setBusy(true);
+    const payload = {
+      name: form.name.trim(),
+      relationship: form.relationship,
+      email: form.email.trim(),
+      phone: form.phone.trim(),
+      birthday: form.birthday || null,
+      address: form.address.trim(),
+      notes: form.notes.trim(),
+    };
+    try {
+      const url = editing ? `${FAMILY_API}/${encodeURIComponent(editing.familyId)}` : FAMILY_API;
+      const res = await fetch(url, {
+        method: editing ? "PUT" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (!res.ok) { setError(data.error || "Request failed."); return; }
+      onSave(editing ? "Family member updated successfully." : "Family member added successfully.");
+    } catch (err) {
+      setError("Network error: " + err.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const label = (text, name, optional) =>
+    h("label", { htmlFor: `fam-${name}` },
+      text,
+      optional ? h("span", { className: "opt" }, " · optional") : h("span", { className: "req" }, " *"));
+
+  return h("section", { className: "panel", id: "family-form-section" },
+    h("div", { className: "panel-head" },
+      h("div", null,
+        h("h2", null, editing ? "Edit Family Member" : "Add Family Member"),
+        h("p", { className: "panel-sub" },
+          editing ? `Updating “${editing.name}” (${editing.familyId})` : "Add someone to your family list.")),
+      h("button", { className: "panel-close", "aria-label": "Close form", type: "button", onClick: onCancel },
+        h(Icon, { name: "close", size: 16 }))
+    ),
+    error && h(Banner, { type: "error", message: error }),
+    h("form", { onSubmit: submit, noValidate: true },
+      h("div", { className: "form-grid" },
+        h("div", { className: "field" }, label("Full Name", "name", false),
+          h("input", { id: "fam-name", name: "name", type: "text", value: form.name, onChange: change,
+            placeholder: "e.g. Asha Deshmukh" })),
+        h("div", { className: "field" }, label("Relationship", "relationship", false),
+          h("select", { id: "fam-relationship", name: "relationship", value: form.relationship, onChange: change },
+            h("option", { value: "" }, "Select a relationship…"),
+            RELATIONSHIPS.map(r => h("option", { key: r, value: r }, r)))),
+        h("div", { className: "field" }, label("Phone Number", "phone", true),
+          h("input", { id: "fam-phone", name: "phone", type: "tel", value: form.phone, onChange: change,
+            placeholder: "+91 98765 43210" })),
+        h("div", { className: "field" }, label("Email Address", "email", true),
+          h("input", { id: "fam-email", name: "email", type: "email", value: form.email, onChange: change,
+            placeholder: "asha@example.com" })),
+        h("div", { className: "field" }, label("Birthday", "birthday", true),
+          h("input", { id: "fam-birthday", name: "birthday", type: "date", value: form.birthday, onChange: change })),
+        h("div", { className: "field" }, label("Address", "address", true),
+          h("input", { id: "fam-address", name: "address", type: "text", value: form.address, onChange: change,
+            placeholder: "Home address" })),
+        h("div", { className: "field" }, label("Notes", "notes", true),
+          h("textarea", { id: "fam-notes", name: "notes", rows: 3, value: form.notes, onChange: change,
+            placeholder: "Anything worth remembering…" })),
+      ),
+      h("div", { className: "form-actions" },
+        h("button", { type: "submit", className: "btn btn-primary", disabled: busy },
+          busy ? "Saving…" : editing ? "Save Changes" : "Add Family Member"),
+        h("button", { type: "button", className: "btn btn-ghost", onClick: onCancel }, "Cancel"),
+      )
+    )
+  );
+}
+
+// ---- Family section (list + form + delete) ----
+function FamilySection({ setBanner }) {
+  const [members, setMembers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [failed, setFailed] = useState(false);
+  const [relationship, setRelationship] = useState("");
+  const [editing, setEditing] = useState(null);
+  const [formOpen, setFormOpen] = useState(false);
+  const [deleting, setDeleting] = useState(null);
+  const [deleteBusy, setDeleteBusy] = useState(false);
+
+  const load = useCallback(async (rel = "") => {
+    setLoading(true);
+    setFailed(false);
+    const url = rel ? `${FAMILY_API}?relationship=${encodeURIComponent(rel)}` : FAMILY_API;
+    try {
+      const res = await fetch(url, { signal: AbortSignal.timeout(12000) });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Request failed");
+      setMembers(data);
+    } catch (err) {
+      setFailed(true);
+      setMembers([]);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  function openAdd() {
+    setEditing(null);
+    setFormOpen(true);
+    setTimeout(() => document.getElementById("family-form-section")?.scrollIntoView({ behavior: "smooth" }), 50);
+  }
+
+  function startEdit(m) {
+    setEditing(m);
+    setFormOpen(true);
+    setTimeout(() => document.getElementById("family-form-section")?.scrollIntoView({ behavior: "smooth" }), 50);
+  }
+
+  function closeForm() {
+    setFormOpen(false);
+    setEditing(null);
+  }
+
+  function handleSaved(message) {
+    closeForm();
+    setBanner({ type: "success", message });
+    load(relationship);
+  }
+
+  function handleFilter(e) {
+    const val = e.target.value;
+    setRelationship(val);
+    load(val);
+  }
+
+  async function confirmDelete() {
+    if (!deleting) return;
+    setDeleteBusy(true);
+    try {
+      const res = await fetch(`${FAMILY_API}/${encodeURIComponent(deleting.familyId)}`, { method: "DELETE" });
+      const data = await res.json();
+      if (!res.ok) { setBanner({ type: "error", message: data.error || "Delete failed." }); return; }
+      setBanner({ type: "success", message: `“${deleting.name}” deleted.` });
+      if (editing?.familyId === deleting.familyId) closeForm();
+      setDeleting(null);
+      load(relationship);
+    } catch (err) {
+      setBanner({ type: "error", message: "Network error: " + err.message });
+    } finally {
+      setDeleteBusy(false);
+    }
+  }
+
+  return h("div", null,
+    (formOpen || editing) && h(FamilyForm, { editing, onSave: handleSaved, onCancel: closeForm }),
+
+    h("section", { className: "panel", id: "family-section" },
+      h("div", { className: "panel-head list-head" },
+        h("div", null,
+          h("h2", null, "Family"),
+          h("p", { className: "panel-sub" },
+            members.length
+              ? `${members.length} family member${members.length === 1 ? "" : "s"}${relationship ? " (filtered)" : ""}`
+              : "No family members to show yet.")
+        ),
+        h("div", { className: "list-filters" },
+          h("select", { value: relationship, onChange: handleFilter, "aria-label": "Filter by relationship" },
+            h("option", { value: "" }, "All relationships"),
+            RELATIONSHIPS.map(r => h("option", { key: r, value: r }, r))),
+          h("button", { className: "btn btn-primary btn-sm", onClick: openAdd },
+            h(Icon, { name: "plus", size: 16 }), "Add Family Member")
+        )
+      ),
+
+      loading && h("div", { className: "state-block" },
+        h("div", { className: "spinner" }), h("p", null, "Loading family members…")),
+
+      failed && !loading && h("div", { className: "state-block" },
+        h("p", null, "Couldn't load family members. The server may be waking up or not updated yet. "),
+        h("button", { className: "btn-link", onClick: () => load(relationship) }, "Try again")),
+
+      !loading && !failed && members.length === 0 && h("div", { className: "state-block empty" },
+        h(Icon, { name: "family", size: 36 }),
+        h("h3", null, relationship ? "No matching family members" : "No family members yet"),
+        h("p", null, relationship
+          ? "Try a different relationship filter."
+          : "Add your first family member to get started."),
+        !relationship && h("button", { className: "btn btn-primary", onClick: openAdd },
+          h(Icon, { name: "plus", size: 16 }), "Add Family Member")),
+
+      !loading && !failed && members.length > 0 && h("div", null,
+        h("div", { className: "table-wrapper" },
+          h("table", null,
+            h("thead", null,
+              h("tr", null,
+                ["Name", "Relationship", "Phone", "Email", "Birthday", "Actions"]
+                  .map(col => h("th", { key: col }, col)))),
+            h("tbody", null,
+              members.map(m =>
+                h("tr", { key: m.familyId },
+                  h("td", null,
+                    h("div", { className: "person" },
+                      h("div", { className: "avatar" }, initials(m.name)),
+                      h("div", null,
+                        h("div", { className: "person-name" }, m.name),
+                        h("div", { className: "person-sub" }, m.familyId)))),
+                  h("td", null, h("span", { className: "badge badge-other" }, m.relationship)),
+                  h("td", null, m.phone || "—"),
+                  h("td", null, m.email
+                    ? h("a", { className: "email-link", href: `mailto:${m.email}` }, m.email)
+                    : "—"),
+                  h("td", null, formatBirthday(m.birthday)),
+                  h("td", null,
+                    h("div", { className: "actions-cell" },
+                      h("button", { className: "icon-btn", "aria-label": `Edit ${m.name}`, title: "Edit",
+                        onClick: () => startEdit(m) }, h(Icon, { name: "edit", size: 15 })),
+                      h("button", { className: "icon-btn danger", "aria-label": `Delete ${m.name}`, title: "Delete",
+                        onClick: () => setDeleting(m) }, h(Icon, { name: "trash", size: 15 }))))
+                )))
+          )
+        ),
+        h("div", { className: "card-list" },
+          members.map(m =>
+            h("div", { className: "contact-card", key: m.familyId },
+              h("div", { className: "contact-card-top" },
+                h("div", { className: "avatar" }, initials(m.name)),
+                h("div", { className: "contact-card-id" },
+                  h("div", { className: "person-name" }, m.name),
+                  h("div", { className: "person-sub" }, m.relationship))),
+              h("dl", { className: "contact-card-fields" },
+                h("div", null, h("dt", null, "Phone"), h("dd", null, m.phone || "—")),
+                h("div", null, h("dt", null, "Email"), h("dd", null, m.email || "—")),
+                h("div", null, h("dt", null, "Birthday"), h("dd", null, formatBirthday(m.birthday)))),
+              h("div", { className: "contact-card-actions" },
+                h("button", { className: "btn btn-sm btn-secondary", onClick: () => startEdit(m) }, "Edit"),
+                h("button", { className: "btn btn-sm btn-danger", onClick: () => setDeleting(m) }, "Delete"))
+            ))
+        )
+      )
+    ),
+
+    deleting && h(ConfirmDelete, {
+      contact: deleting, busy: deleteBusy, kind: "family member",
+      onConfirm: confirmDelete, onCancel: () => { if (!deleteBusy) setDeleting(null); },
+    })
+  );
+}
+
+// ---- App (root) ----
 function App() {
   const [contacts, setContacts] = useState([]);
   const [stats, setStats] = useState(null);
@@ -385,13 +698,19 @@ function App() {
   const navItems = [
     { id: "dashboard", label: "Dashboard", icon: "dashboard" },
     { id: "contacts", label: "Contacts", icon: "contacts" },
+    { id: "family", label: "Family", icon: "family" },
   ];
+
+  const NAV_TARGETS = {
+    dashboard: "stats-section",
+    contacts: "contacts-section",
+    family: "family-section",
+  };
 
   function gotoNav(id) {
     setActiveNav(id);
     setNavOpen(false);
-    const target = document.getElementById(id === "dashboard" ? "stats-section" : "contacts-section");
-    target?.scrollIntoView({ behavior: "smooth" });
+    document.getElementById(NAV_TARGETS[id])?.scrollIntoView({ behavior: "smooth" });
   }
 
   return h("div", { className: "app" },
@@ -433,12 +752,12 @@ function App() {
       h("main", { className: "main" },
         h(Banner, { type: banner.type, message: banner.message }),
 
-        // â”€â”€ Page header â”€â”€
+        // ---- Page header ----
         h("div", { className: "page-head" },
           h("div", null,
             h("h1", null, "Contact Management"),
             h("p", { className: "page-sub" },
-              "Keep track of clients, colleagues and business contacts in one place.")
+              "Keep track of clients, colleagues, business contacts and family in one place.")
           ),
           h("div", { className: "page-head-actions" },
             h("div", { className: "search-box" },
@@ -453,7 +772,7 @@ function App() {
           )
         ),
 
-        // â”€â”€ Summary statistics â”€â”€
+        // ---- Summary statistics ----
         h("section", { className: "stats-grid", id: "stats-section", "aria-label": "Summary statistics" },
           h(StatCard, { label: "Total Contacts", value: stats ? stats.totalContacts : "—", icon: "contacts" }),
           h(StatCard, { label: "Companies", value: stats ? stats.companies : "—", icon: "building" }),
@@ -461,7 +780,7 @@ function App() {
           h(StatCard, { label: "Added Last 7 Days", value: stats ? stats.recentlyAdded : "—", icon: "clock" }),
         ),
 
-        // â”€â”€ Contact form (add/edit) â”€â”€
+        // ---- Contact form (add/edit) ----
         hasActiveForm && h(ContactForm, {
           editing,
           onSave: refreshAll,
@@ -470,7 +789,7 @@ function App() {
           setBanner,
         }),
 
-        // â”€â”€ Contacts list â”€â”€
+        // ---- Contacts list ----
         h("section", { className: "panel", id: "contacts-section" },
           h("div", { className: "panel-head list-head" },
             h("div", null,
@@ -525,6 +844,9 @@ function App() {
             )
           )
         ),
+
+        // ---- Family section ----
+        h(FamilySection, { setBanner }),
 
         h("footer", { className: "app-foot" },
           h("p", null, "ContactFlow — Contact Management System"))

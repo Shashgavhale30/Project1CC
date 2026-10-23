@@ -1,232 +1,219 @@
-#!/usr/bin/env node
-// ContactFlow MCP server (stdio).
-//
-// Lets an MCP client (Claude Desktop, Claude Code, ...) read and add contacts in
-// the ContactFlow portal by calling its REST API. It never touches MongoDB
-// directly, so no database credentials are needed here, and all validation
-// stays in the backend.
-//
-// Config (env):
-//   CONTACTFLOW_API_URL  Base URL of the contacts API.
-//                        Default: https://project1cc-backend.onrender.com/api/contacts
-
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { z } from "zod";
+import {
+  CallToolRequestSchema,
+  ListToolsRequestSchema,
+} from "@modelcontextprotocol/sdk/types.js";
+import axios from "axios";
+import fs from "fs/promises";
+import path from "path";
+import { execFile } from "child_process";
+import { promisify } from "util";
 
-const API = (
+const execFileAsync = promisify(execFile);
+
+const API_URL =
   process.env.CONTACTFLOW_API_URL ||
-  "https://project1cc-backend.onrender.com/api/contacts"
-).replace(/\/+$/, "");
+  "https://project1cc-backend.onrender.com/api/contacts";
+const API_TOKEN = process.env.CONTACTFLOW_API_TOKEN || "";
+const PROJECT_ROOT = path.resolve(process.env.PROJECT_ROOT || "D:\\Project1CC");
 
-// Render's free tier sleeps when idle; the first request can take ~30-60s.
-const TIMEOUT_MS = 60000;
+// Files/folders the AI must never write to
+const BLOCKED = [".git", "node_modules", ".env", ".mcp.json"];
 
-const CATEGORIES = ["Client", "Colleague", "Business Partner", "Vendor", "Other"];
-
-// ── HTTP helper ────────────────────────────────────────────
-class ApiError extends Error {
-  constructor(status, message) {
-    super(message);
-    this.status = status;
-  }
-}
-
-async function api(path = "", { method = "GET", body, query } = {}) {
-  const url = new URL(API + path);
-  for (const [k, v] of Object.entries(query || {})) {
-    if (v !== undefined && v !== "") url.searchParams.set(k, v);
-  }
-  let res;
-  try {
-    res = await fetch(url, {
-      method,
-      headers: body ? { "Content-Type": "application/json" } : undefined,
-      body: body ? JSON.stringify(body) : undefined,
-      signal: AbortSignal.timeout(TIMEOUT_MS),
-    });
-  } catch (err) {
-    throw new ApiError(
-      0,
-      `Could not reach the ContactFlow API at ${API} (${err.name === "TimeoutError" ? "timed out" : err.message}).`,
-    );
-  }
-  const text = await res.text();
-  let data;
-  try {
-    data = text ? JSON.parse(text) : null;
-  } catch {
-    data = null;
-  }
-  if (!res.ok) {
-    throw new ApiError(res.status, (data && data.error) || `API returned HTTP ${res.status}.`);
-  }
-  return data;
-}
-
-// ── Result helpers ─────────────────────────────────────────
-const ok = (value) => ({
-  content: [
-    { type: "text", text: typeof value === "string" ? value : JSON.stringify(value, null, 2) },
-  ],
+const api = axios.create({
+  timeout: 60000, // Render free tier cold start
+  headers: API_TOKEN ? { Authorization: `Bearer ${API_TOKEN}` } : {},
 });
-const fail = (message) => ({ isError: true, content: [{ type: "text", text: message }] });
 
-async function guarded(fn) {
-  try {
-    return await fn();
-  } catch (err) {
-    return fail(err instanceof ApiError ? err.message : `Unexpected error: ${err.message}`);
+// Resolve a relative path and make sure it stays inside PROJECT_ROOT
+function safePath(relPath) {
+  const full = path.resolve(PROJECT_ROOT, relPath);
+  const rel = path.relative(PROJECT_ROOT, full);
+  if (rel.startsWith("..") || path.isAbsolute(rel)) {
+    throw new Error("Path is outside the project directory");
   }
+  const parts = rel.split(path.sep).map((p) => p.toLowerCase());
+  if (parts.some((p) => BLOCKED.includes(p) || p.startsWith(".env"))) {
+    throw new Error(`Writing to "${rel}" is blocked`);
+  }
+  return full;
 }
 
-// ── Schemas ────────────────────────────────────────────────
-const contactFields = {
-  name: z.string().min(1).max(100).describe("Full name (required, max 100 chars)"),
-  email: z.string().min(1).describe("Email address (required, must be valid; unique across contacts)"),
-  company: z.string().min(1).max(120).describe("Company / organization (required, max 120 chars)"),
-  category: z.enum(CATEGORIES).describe("One of: " + CATEGORIES.join(", ")),
-  phone: z.string().max(30).optional().describe("Phone number (max 30 chars)"),
-  jobTitle: z.string().max(120).optional().describe("Job title (max 120 chars)"),
-  notes: z.string().max(1000).optional().describe("Free-text notes (max 1000 chars)"),
-};
-const contactSchema = z.object(contactFields);
+async function git(...gitArgs) {
+  return execFileAsync("git", gitArgs, { cwd: PROJECT_ROOT, windowsHide: true });
+}
 
-const server = new McpServer({ name: "contactflow", version: "1.0.0" });
+const text = (t) => ({ content: [{ type: "text", text: t }] });
 
-// ── Tools ──────────────────────────────────────────────────
-server.registerTool(
-  "list_contacts",
-  {
-    title: "List / search contacts",
-    description:
-      "List contacts in ContactFlow, newest first. Optionally filter by a search term (matches name, email or company) and/or category. Use this to check for an existing contact before adding one.",
-    inputSchema: {
-      search: z.string().optional().describe("Substring to match in name, email or company"),
-      category: z.enum(CATEGORIES).optional().describe("Only return this category"),
-      limit: z.number().int().min(1).max(200).optional().describe("Max contacts to return (default 50)"),
+const server = new Server(
+  { name: "project1cc-mcp-server", version: "1.1.0" },
+  { capabilities: { tools: {} } }
+);
+
+server.setRequestHandler(ListToolsRequestSchema, async () => ({
+  tools: [
+    // 1. CONTACTS CRUD
+    {
+      name: "get_contacts",
+      description: "Retrieve all contacts from the backend API.",
+      inputSchema: { type: "object", properties: {} },
     },
-    annotations: { readOnlyHint: true, openWorldHint: false },
-  },
-  ({ search, category, limit }) =>
-    guarded(async () => {
-      const all = await api("", { query: { search, category } });
-      const max = limit ?? 50;
-      return ok({ total: all.length, returned: Math.min(all.length, max), contacts: all.slice(0, max) });
-    }),
-);
+    {
+      name: "add_contact",
+      description: "Add a new contact to the backend.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          name: { type: "string" },
+          email: { type: "string" },
+          phone: { type: "string" },
+        },
+        required: ["name"],
+      },
+    },
+    {
+      name: "update_contact",
+      description: "Update an existing contact by ID.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          id: { type: "string" },
+          name: { type: "string" },
+          email: { type: "string" },
+          phone: { type: "string" },
+        },
+        required: ["id"],
+      },
+    },
+    {
+      name: "delete_contact",
+      description: "Delete a contact by ID.",
+      inputSchema: {
+        type: "object",
+        properties: { id: { type: "string" } },
+        required: ["id"],
+      },
+    },
 
-server.registerTool(
-  "get_contact",
-  {
-    title: "Get one contact",
-    description: "Fetch a single contact by its contactId (e.g. CT-ABC123-XY12).",
-    inputSchema: { contactId: z.string().min(1).describe("The contact's contactId") },
-    annotations: { readOnlyHint: true, openWorldHint: false },
-  },
-  ({ contactId }) => guarded(async () => ok(await api(`/${encodeURIComponent(contactId)}`))),
-);
+    // 2. FILE TOOLS
+    {
+      name: "read_project_file",
+      description:
+        "Read a file in the Project1CC directory. Always read a file before editing it.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          filePath: {
+            type: "string",
+            description: "Relative path from project root, e.g. 'backend/server.js'",
+          },
+        },
+        required: ["filePath"],
+      },
+    },
+    {
+      name: "edit_project_file",
+      description:
+        "Create or overwrite a file in the Project1CC directory (frontend or backend). Send the COMPLETE new file content.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          filePath: {
+            type: "string",
+            description: "Relative path from project root, e.g. 'frontend/src/App.jsx'",
+          },
+          content: { type: "string", description: "Complete new content for the file" },
+        },
+        required: ["filePath", "content"],
+      },
+    },
 
-server.registerTool(
-  "get_stats",
-  {
-    title: "Dashboard stats",
-    description: "Summary numbers shown on the portal dashboard: total contacts, companies, clients, recently added.",
-    inputSchema: {},
-    annotations: { readOnlyHint: true, openWorldHint: false },
-  },
-  () => guarded(async () => ok(await api("/stats"))),
-);
+    // 3. GIT
+    {
+      name: "git_status",
+      description: "Show git status of the project (changed files, current branch).",
+      inputSchema: { type: "object", properties: {} },
+    },
+    {
+      name: "git_commit_and_push",
+      description:
+        "Stage all changes, commit with a message, and push the current branch to GitHub.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          commitMessage: {
+            type: "string",
+            description: "Commit message describing the changes",
+          },
+        },
+        required: ["commitMessage"],
+      },
+    },
+  ],
+}));
 
-server.registerTool(
-  "add_contact",
-  {
-    title: "Add a contact",
-    description:
-      "Create one contact in the ContactFlow portal. name, email, company and category are required. The contactId is generated automatically. Fails with a clear message if the email already exists or validation fails.",
-    inputSchema: contactFields,
-    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
-  },
-  (contact) =>
-    guarded(async () => {
-      const created = await api("", { method: "POST", body: contact });
-      return ok({ message: "Contact added.", contact: created });
-    }),
-);
+server.setRequestHandler(CallToolRequestSchema, async (request) => {
+  const { name, arguments: args = {} } = request.params;
 
-server.registerTool(
-  "add_contacts_bulk",
-  {
-    title: "Add many contacts",
-    description:
-      "Create several contacts in one call (max 100). Each is added independently: a failure on one (e.g. duplicate email) does not stop the rest. Returns which succeeded and which failed, with reasons.",
-    inputSchema: { contacts: z.array(contactSchema).min(1).max(100).describe("Contacts to add") },
-    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
-  },
-  ({ contacts }) =>
-    guarded(async () => {
-      const added = [];
-      const failed = [];
-      // Sequential on purpose: keeps load on the (free-tier) backend low and
-      // gives a deterministic order in the portal.
-      for (const [i, c] of contacts.entries()) {
-        try {
-          const created = await api("", { method: "POST", body: c });
-          added.push({ contactId: created.contactId, name: created.name, email: created.email });
-        } catch (err) {
-          failed.push({ index: i, name: c.name, email: c.email, error: err.message });
-        }
+  try {
+    switch (name) {
+      case "get_contacts": {
+        const res = await api.get(API_URL);
+        return text(JSON.stringify(res.data, null, 2));
       }
-      const summary = { requested: contacts.length, added: added.length, failed: failed.length, addedContacts: added, failures: failed };
-      return failed.length === contacts.length ? { ...fail(JSON.stringify(summary, null, 2)) } : ok(summary);
-    }),
-);
+      case "add_contact": {
+        const res = await api.post(API_URL, args);
+        return text(`Added contact: ${JSON.stringify(res.data)}`);
+      }
+      case "update_contact": {
+        const { id, ...updateData } = args;
+        const res = await api.put(`${API_URL}/${encodeURIComponent(id)}`, updateData);
+        return text(`Updated contact: ${JSON.stringify(res.data)}`);
+      }
+      case "delete_contact": {
+        await api.delete(`${API_URL}/${encodeURIComponent(args.id)}`);
+        return text(`Deleted contact with ID: ${args.id}`);
+      }
 
-server.registerTool(
-  "update_contact",
-  {
-    title: "Update a contact",
-    description:
-      "Partially update an existing contact by contactId. Only the fields you pass are changed. Look the contact up first with list_contacts if you only know the name or email.",
-    inputSchema: {
-      contactId: z.string().min(1).describe("The contact's contactId"),
-      name: contactFields.name.optional(),
-      email: contactFields.email.optional(),
-      company: contactFields.company.optional(),
-      category: contactFields.category.optional(),
-      phone: contactFields.phone,
-      jobTitle: contactFields.jobTitle,
-      notes: contactFields.notes,
-    },
-    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
-  },
-  ({ contactId, ...changes }) =>
-    guarded(async () => {
-      if (Object.keys(changes).length === 0) return fail("No fields to update were provided.");
-      const updated = await api(`/${encodeURIComponent(contactId)}`, { method: "PUT", body: changes });
-      return ok({ message: "Contact updated.", contact: updated });
-    }),
-);
+      case "read_project_file": {
+        const full = path.resolve(PROJECT_ROOT, args.filePath);
+        const rel = path.relative(PROJECT_ROOT, full);
+        if (rel.startsWith("..") || path.isAbsolute(rel))
+          throw new Error("Path is outside the project directory");
+        if (rel.split(path.sep).some((p) => p.toLowerCase().startsWith(".env")))
+          throw new Error("Reading .env files is blocked");
+        return text(await fs.readFile(full, "utf8"));
+      }
+      case "edit_project_file": {
+        const full = safePath(args.filePath);
+        await fs.mkdir(path.dirname(full), { recursive: true });
+        await fs.writeFile(full, args.content, "utf8");
+        return text(`Wrote file: ${args.filePath}`);
+      }
 
-server.registerTool(
-  "delete_contact",
-  {
-    title: "Delete a contact",
-    description:
-      "PERMANENTLY delete one contact by contactId. This cannot be undone. If the person only gave a name or email, find the contactId with list_contacts first, and if more than one contact could match or the request is vague, confirm which one with the person before deleting. Returns the contact that was removed.",
-    inputSchema: { contactId: z.string().min(1).describe("The contactId of the contact to delete") },
-    annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
-  },
-  ({ contactId }) =>
-    guarded(async () => {
-      const path = `/${encodeURIComponent(contactId)}`;
-      // Fetch first so the result says exactly what was removed (and a missing ID fails cleanly).
-      const existing = await api(path);
-      await api(path, { method: "DELETE" });
-      return ok({ message: "Contact deleted.", deleted: existing });
-    }),
-);
+      case "git_status": {
+        const { stdout } = await git("status", "--short", "--branch");
+        return text(stdout || "Working tree clean");
+      }
+      case "git_commit_and_push": {
+        await git("add", "-A");
+        const { stdout: staged } = await git("status", "--porcelain");
+        if (!staged.trim()) return text("Nothing to commit, working tree clean.");
+        await git("commit", "-m", args.commitMessage);
+        const { stdout, stderr } = await git("push", "origin", "HEAD");
+        return text(`Committed and pushed.\n${stdout}${stderr}`);
+      }
 
-// ── Start ──────────────────────────────────────────────────
+      default:
+        throw new Error(`Unknown tool: ${name}`);
+    }
+  } catch (error) {
+    const detail = error.response
+      ? `${error.response.status}: ${JSON.stringify(error.response.data)}`
+      : error.stderr || error.message;
+    return { content: [{ type: "text", text: `Error in ${name}: ${detail}` }], isError: true };
+  }
+});
+
 await server.connect(new StdioServerTransport());
-console.error(`ContactFlow MCP server running (API: ${API})`);

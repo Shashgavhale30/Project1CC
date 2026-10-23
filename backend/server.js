@@ -7,6 +7,7 @@ const { GoogleGenerativeAI } = require("@google/generative-ai");
 
 const Contact = require("./models/Contact");
 const contactsRouter = require("./routes/contacts");
+const familyRouter = require("./routes/family");
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -58,6 +59,9 @@ app.get("/", (req, res) => {
 
 // Standard CRUD routes (also used by the MCP server)
 app.use("/api/contacts", contactsRouter);
+
+// Family section CRUD routes
+app.use("/api/family", familyRouter);
 
 // ==========================================
 // Gemini AI natural-language endpoint
