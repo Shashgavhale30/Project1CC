@@ -3,14 +3,14 @@
 A three-tier cloud web application for managing contact information for clients, colleagues, business partners and vendors.
 
 **Stack:** React 18 (CDN, no build step) + Node.js/Express + MongoDB Atlas
-**Deployed on:** Netlify (frontend) · Render (backend) · MongoDB Atlas (database)
+**Deployed on:** Vercel (frontend) · Render (backend) · MongoDB Atlas (database)
 
 ---
 
 ## How it works
 
 ```
-Browser → Netlify (static frontend) → Render (REST API) → MongoDB Atlas (database)
+Browser → Vercel (static frontend) → Render (REST API) → MongoDB Atlas (database)
 ```
 
 The frontend never connects to the database directly. All data goes through the backend API.
@@ -22,7 +22,7 @@ The frontend never connects to the database directly. All data goes through the 
 ```bash
 # 1. Clone and install
 git clone https://github.com/Shashgavhale30/Project1CC.git
-cd Project1CC/student-system/backend
+cd Project1CC/backend
 npm install
 
 # 2. Create backend/.env with these variables:
@@ -38,13 +38,17 @@ npm start
 
 ---
 
-## Environment Variables (backend/.env)
+## Environment Variables (backend/.env locally, Render dashboard in production)
 
 | Variable | Description |
 |----------|-------------|
-| `MONGODB_URI` | Atlas connection string — `mongodb+srv://user:pass@cluster.mongodb.net/contactflow` |
-| `FRONTEND_URL` | Allowed origin(s), comma-separated, no trailing slash |
+| `MONGODB_URI` | Atlas connection string — `mongodb+srv://user:pass@cluster.mongodb.net/contactflow` (include the database name after the host) |
+| `MONGODB_DB_NAME` | Optional. Forces a database name if the URI has none |
+| `FRONTEND_URL` | Allowed origin(s), comma-separated, no trailing slash. In production set this to the Vercel URL |
+| `GEMINI_API_KEY` | Optional. Enables `/api/ai-command` |
 | `PORT` | Server port (Render sets this automatically) |
+
+Never commit `.env` or paste connection strings into source files.
 
 ---
 
@@ -86,10 +90,13 @@ backend/
    - Root directory: `backend`
    - Build: `npm install` · Start: `npm start`
    - Env vars: `MONGODB_URI` and `FRONTEND_URL`
-   - `FRONTEND_URL` should be your Netlify origin, for example `https://project1cc.netlify.app`
+   - `FRONTEND_URL` should be your Vercel origin, for example `https://project1cc.vercel.app`
 
-3. **Update** `const API` in `frontend/script.js` to your Render URL + `/api/contacts`, commit and push.
+3. **Update** `API_ROOT` in `frontend/script.js` to your Render URL + `/api` if the service URL differs, commit and push.
 
-4. **Netlify** — import repo, base dir `frontend`, publish dir `frontend`, no build command.
+4. **Vercel** — import the repo:
+   - Framework preset: Other
+   - Root directory: `frontend`
+   - Build command: none · Output directory: `.` (configured in `frontend/vercel.json`)
 
-5. **Update** `FRONTEND_URL` on Render to your Netlify URL (no trailing slash), then redeploy the backend.
+5. **Update** `FRONTEND_URL` on Render to your Vercel URL (no trailing slash), then redeploy the backend.

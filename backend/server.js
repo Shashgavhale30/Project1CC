@@ -5,9 +5,9 @@ const cors = require("cors");
 const rateLimit = require("express-rate-limit");
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 
-const Contact = require("./models/Contact");
+// models/Contact.js exports { Contact, CATEGORIES }; destructure the model
+const { Contact } = require("./models/Contact");
 const contactsRouter = require("./routes/contacts");
-const familyRouter = require("./routes/family");
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -15,7 +15,9 @@ const PORT = process.env.PORT || 5000;
 // Render sits behind a proxy; needed for correct client IPs in rate limiting
 app.set("trust proxy", 1);
 
-const DEFAULT_ALLOWED_ORIGINS = ["https://project1cc.netlify.app"];
+// Allowed browser origins come from FRONTEND_URL (comma-separated).
+// Set it on Render to the Vercel production URL, e.g. https://your-app.vercel.app
+const DEFAULT_ALLOWED_ORIGINS = [];
 
 function normalizeOrigin(origin) {
   return origin.trim().replace(/\/+$/, "");
@@ -28,6 +30,12 @@ const allowedOrigins = new Set([
     .map((o) => normalizeOrigin(o))
     .filter(Boolean),
 ]);
+
+if (process.env.NODE_ENV === "production" && allowedOrigins.size === 0) {
+  console.warn(
+    "FRONTEND_URL is not set: browser requests from the frontend will be blocked by CORS."
+  );
+}
 
 const isLocalOrigin = (o) => /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(o);
 
@@ -59,9 +67,6 @@ app.get("/", (req, res) => {
 
 // Standard CRUD routes (also used by the MCP server)
 app.use("/api/contacts", contactsRouter);
-
-// Family section CRUD routes
-app.use("/api/family", familyRouter);
 
 // ==========================================
 // Gemini AI natural-language endpoint
@@ -205,13 +210,69 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: "Internal server error" });
 });
 
+// ==========================================
+// MongoDB connection
+// ==========================================
+
+// Reads MONGODB_URI, tolerating common copy/paste mistakes (whitespace, wrapping quotes).
+// Never logs the URI itself.
+function getMongoUri() {
+  const raw = process.env.MONGODB_URI;
+  if (!raw || !raw.trim()) {
+    console.error(
+      "MONGODB_URI is not set. Add it in Render > Environment (or backend/.env locally)."
+    );
+    return null;
+  }
+  const uri = raw.trim().replace(/^['"]|['"]$/g, "");
+  if (!/^mongodb(\+srv)?:\/\//.test(uri)) {
+    console.error("MONGODB_URI must start with mongodb:// or mongodb+srv://");
+    return null;
+  }
+  // More than one "@" in the authority means the password has an unencoded "@"
+  const authority = uri.replace(/^mongodb(\+srv)?:\/\//, "").split("/")[0];
+  if ((authority.match(/@/g) || []).length > 1) {
+    console.error(
+      "MONGODB_URI looks like its password contains an unencoded '@'. URL-encode special characters (e.g. @ -> %40)."
+    );
+    return null;
+  }
+  return uri;
+}
+
+// Strip any credentials that might appear in a driver error message
+const redact = (msg) => String(msg || "").replace(/:\/\/\S*@/g, "://***@");
+
+function mongoHint(msg) {
+  if (/bad auth|authentication failed/i.test(msg))
+    return "Check the Atlas database user and password (URL-encode special characters in the password).";
+  if (/ENOTFOUND|querySrv|EAI_AGAIN/i.test(msg))
+    return "Check the cluster hostname in MONGODB_URI.";
+  if (/ECONNREFUSED|timed out|ReplicaSetNoPrimary|Server selection/i.test(msg))
+    return "Check Atlas > Network Access allows connections from Render (e.g. 0.0.0.0/0).";
+  return "";
+}
+
+const mongoUri = getMongoUri();
+if (!mongoUri) process.exit(1);
+
+const connectOptions = { serverSelectionTimeoutMS: 15000 };
+// Optional: force a specific database when the URI has no /dbname segment
+// (without one, MongoDB silently uses a database called "test").
+if (process.env.MONGODB_DB_NAME && process.env.MONGODB_DB_NAME.trim()) {
+  connectOptions.dbName = process.env.MONGODB_DB_NAME.trim();
+}
+
 mongoose
-  .connect(process.env.MONGODB_URI)
+  .connect(mongoUri, connectOptions)
   .then(() => {
-    console.log("Connected to MongoDB Atlas");
+    console.log(`Connected to MongoDB Atlas (database: ${mongoose.connection.name})`);
     app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
   })
   .catch((err) => {
-    console.error("MongoDB connection failed:", err.message);
+    const msg = redact(err.message);
+    console.error("MongoDB connection failed:", msg);
+    const hint = mongoHint(msg);
+    if (hint) console.error("Hint:", hint);
     process.exit(1);
   });
