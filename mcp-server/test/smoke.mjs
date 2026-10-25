@@ -65,6 +65,7 @@ const fixtureInner = path.join(fixtureDir, "inner.txt");
 const badJs = ".mcp-smoke-bad.js";
 const fixtures = [tempFile, deleteFile, decoyEnv, badJs];
 
+const serverPath = fileURLToPath(new URL("../server.js", import.meta.url));
 const client = new Client({ name: "contactflow-smoke", version: "1.0.0" });
 
 try {
@@ -72,7 +73,7 @@ try {
 
   await client.connect(new StdioClientTransport({
     command: process.execPath,
-    args: [fileURLToPath(new URL("../server.js", import.meta.url))],
+    args: [serverPath],
     env: {
       ...process.env,
       CONTACTFLOW_API_URL:
@@ -93,12 +94,17 @@ try {
     "get_contacts",
     "git_add",
     "git_commit",
+    "git_fetch",
+    "git_inspect",
     "git_push",
     "git_review",
+    "git_set_origin",
     "git_status",
+    "git_unstage",
     "list_project_files",
     "read_project_file",
     "run_approved_command",
+    "scan_for_secrets",
     "update_contact"
   ].sort());
   assert.ok(!names.includes("git_commit_and_push"), "git_commit_and_push must be gone");
@@ -212,6 +218,11 @@ try {
   }
   assert.ok(await exists(decoyEnv), "protected decoy must survive");
   assert.ok(await exists(fixtureInner), "directory contents must survive");
+  // The MCP server's own files can never be deleted through the tool
+  for (const core of ["server.js", "git-helpers.js", "package.json"]) {
+    await refused("delete_project_file", { filePath: core, confirm: true }, /core MCP server file/);
+    assert.ok(await exists(core), `${core} must survive`);
+  }
   console.log("PASS: delete_project_file rejects protected paths, traversal, directories and missing files");
 
   const deleted = await call("delete_project_file", { filePath: deleteFile, confirm: true });
@@ -225,6 +236,9 @@ try {
     "git push",
     "git status --short && echo hi",
     "git status",
+    "git log",
+    "git remote -v",
+    "git diff --cached --name-only",
     "npm install",
     "node --version",
     "powershell -c 1",
@@ -274,6 +288,12 @@ try {
   await refused("git_push", { confirm: false }, /confirm/);
   await refused("git_push", { confirm: "true" }, /confirm/);
   console.log("PASS: git_commit needs a message; git_push refuses unless confirm === true");
+
+  // ---- Git inspection, safe first push, secret gate (throwaway repos) -----
+  // These tests spawn their own server against a temp repository and a local
+  // bare repository standing in for GitHub; the real repo and remote are never used.
+  const { runGitToolTests } = await import("./git-tools.mjs");
+  await runGitToolTests({ serverPath });
 
   console.log("\nAll smoke checks passed.");
 } finally {
