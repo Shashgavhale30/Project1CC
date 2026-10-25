@@ -17,6 +17,7 @@ const EMPTY = {
   company: "",
   jobTitle: "",
   category: "",
+  age: "",
   notes: "",
 };
 
@@ -86,6 +87,7 @@ function ContactForm({ editing, onSave, onCancel, banner, setBanner }) {
           company: editing.company || "",
           jobTitle: editing.jobTitle || "",
           category: editing.category || "",
+          age: editing.age === null || editing.age === undefined ? "" : String(editing.age),
           notes: editing.notes || "",
         }
       : EMPTY
@@ -101,6 +103,11 @@ function ContactForm({ editing, onSave, onCancel, banner, setBanner }) {
     if (!/\S+@\S+\.\S+/.test(form.email)) return "A valid email address is required.";
     if (!form.company.trim()) return "Company / organization is required.";
     if (!CATEGORIES.includes(form.category)) return "Please select a category.";
+    if (form.age.trim() !== "") {
+      const age = Number(form.age);
+      if (!Number.isInteger(age) || age < 0 || age > 120)
+        return "Age must be a whole number between 0 and 120.";
+    }
     if (form.phone.trim() && form.phone.trim().length > 30) return "Phone number is too long.";
     return null;
   }
@@ -117,6 +124,7 @@ function ContactForm({ editing, onSave, onCancel, banner, setBanner }) {
       company: form.company.trim(),
       jobTitle: form.jobTitle.trim(),
       category: form.category,
+      age: form.age.trim() === "" ? null : Number(form.age),
       notes: form.notes.trim(),
     };
     try {
@@ -175,6 +183,7 @@ function ContactForm({ editing, onSave, onCancel, banner, setBanner }) {
         field("Company / Organization", "company", "text", { placeholder: "e.g. Acme Corp", required: true }),
         field("Job Title", "jobTitle", "text", { placeholder: "e.g. Account Manager" }, true),
         field("Category", "category"),
+        field("Age", "age", "number", { placeholder: "e.g. 28", min: 0, max: 120, step: 1, inputMode: "numeric" }, true),
         field("Notes", "notes", "text", { placeholder: "Anything worth remembering about this contact…" }, true),
       ),
       h("div", { className: "form-actions" },
@@ -199,6 +208,11 @@ function initials(name) {
   return name.trim().split(/\s+/).slice(0, 2).map(w => w[0].toUpperCase()).join("");
 }
 
+// ---- Age display (0 is a valid age; null/undefined means not provided) ----
+function showAge(age) {
+  return age === null || age === undefined ? "—" : age;
+}
+
 // ---- Contact row (desktop table) ----
 function ContactRow({ c, onEdit, onDelete }) {
   return h("tr", null,
@@ -216,6 +230,7 @@ function ContactRow({ c, onEdit, onDelete }) {
     h("td", null, c.jobTitle || "—"),
     h("td", null, h(CategoryBadge, { category: c.category })),
     h("td", null, c.phone || "—"),
+    h("td", null, showAge(c.age)),
     h("td", null,
       h("div", { className: "actions-cell" },
         h("button", { className: "icon-btn", "aria-label": `Edit ${c.name}`, title: "Edit",
@@ -242,6 +257,7 @@ function ContactCard({ c, onEdit, onDelete }) {
       h("div", null, h("dt", null, "Email"), h("dd", null, c.email)),
       h("div", null, h("dt", null, "Phone"), h("dd", null, c.phone || "—")),
       h("div", null, h("dt", null, "Job Title"), h("dd", null, c.jobTitle || "—")),
+      h("div", null, h("dt", null, "Age"), h("dd", null, showAge(c.age))),
     ),
     h("div", { className: "contact-card-actions" },
       h("button", { className: "btn btn-sm btn-secondary", onClick: () => onEdit(c) }, "Edit"),
@@ -514,7 +530,7 @@ function App() {
               h("table", null,
                 h("thead", null,
                   h("tr", null,
-                    ["Name", "Email", "Company", "Job Title", "Category", "Phone", "Actions"]
+                    ["Name", "Email", "Company", "Job Title", "Category", "Phone", "Age", "Actions"]
                       .map(col => h("th", { key: col }, col))
                   )
                 ),

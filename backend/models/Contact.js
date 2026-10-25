@@ -32,6 +32,17 @@ const contactSchema = new mongoose.Schema(
         message: "Category must be one of: {VALUES}",
       },
     },
+    // Optional: existing contacts have no age, so null means "not provided"
+    age: {
+      type: Number,
+      default: null,
+      min: [0, "Age must be between 0 and 120"],
+      max: [120, "Age must be between 0 and 120"],
+      validate: {
+        validator: (v) => v === null || v === undefined || Number.isInteger(v),
+        message: "Age must be a whole number",
+      },
+    },
     notes: { type: String, trim: true, default: "", maxlength: 1000 },
   },
   { timestamps: true, collection: "contacts" },

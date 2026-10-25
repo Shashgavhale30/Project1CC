@@ -6,6 +6,9 @@ function escapeRegex(str) {
   return str.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, "\\$&");
 }
 
+// Age is optional: undefined / null / "" all mean "not provided".
+const isBlank = (v) => v === undefined || v === null || String(v).trim() === "";
+
 // ── Input validation (shared by create & update) ───────────
 function validateContactInput(data, { partial = false } = {}) {
   const errors = [];
@@ -40,6 +43,11 @@ function validateContactInput(data, { partial = false } = {}) {
       errors.push("Category must be one of: " + valid.join(", ") + ".");
     }
   }
+  if (!isBlank(data.age)) {
+    const age = Number(data.age);
+    if (!Number.isInteger(age) || age < 0 || age > 120)
+      errors.push("Age must be a whole number between 0 and 120.");
+  }
   if (data.phone !== undefined && String(data.phone).trim().length > 30)
     errors.push("Phone number must be 30 characters or fewer.");
   if (data.jobTitle !== undefined && String(data.jobTitle).trim().length > 120)
@@ -62,6 +70,8 @@ function normalizeContactPayload(body) {
     payload.jobTitle = String(body.jobTitle).trim();
   if (body.category !== undefined)
     payload.category = String(body.category).trim();
+  if (body.age !== undefined)
+    payload.age = isBlank(body.age) ? null : Number(body.age);
   if (body.notes !== undefined) payload.notes = String(body.notes).trim();
   return payload;
 }

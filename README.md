@@ -64,7 +64,7 @@ Never commit `.env` or paste connection strings into source files.
 | PUT | `/api/contacts/:id` | Update a contact (partial update supported) |
 | DELETE | `/api/contacts/:id` | Delete a contact |
 
-**Contact fields:** `contactId` (auto), `name`*, `email`*, `phone`, `company`*, `jobTitle`, `category`* (Client, Colleague, Business Partner, Vendor, Other), `notes` (* = required).
+**Contact fields:** `contactId` (auto), `name`*, `email`*, `phone`, `company`*, `jobTitle`, `category`* (Client, Colleague, Business Partner, Vendor, Other), `age` (optional whole number, 0–120; blank or `null` means not provided), `notes` (* = required).
 
 > **Note on existing data:** the previous student collection is left untouched in the database. Student records are not compatible with the contact schema, so they were not migrated destructively. You can keep the old collection as an archive and add contacts fresh, or migrate manually once you approve it.
 
