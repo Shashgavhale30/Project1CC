@@ -295,6 +295,12 @@ try {
   const { runGitToolTests } = await import("./git-tools.mjs");
   await runGitToolTests({ serverPath });
 
+  // ---- Backend MongoDB URI handling (real backend/server.js, fake URIs only) ----
+  // Malformed URIs must be detected before any connection attempt, and no
+  // credential may ever be printed. Production is never contacted.
+  const { runMongoUriTests } = await import("./mongo-uri.mjs");
+  await runMongoUriTests();
+
   console.log("\nAll smoke checks passed.");
 } finally {
   await client.close().catch(() => {});
